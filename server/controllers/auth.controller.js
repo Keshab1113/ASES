@@ -271,16 +271,11 @@ exports.login = async (req, res) => {
   }
 };
 
-// Get pending approvals (for admin dashboard)
+// Get pending approvals for the current user's scope
 exports.getPendingApprovals = async (req, res) => {
   try {
     const user = req.user; // From JWT middleware
     
-    // Check if user has permission to view approvals
-    if (!['super_admin', 'group_admin', 'team_admin'].includes(user.role)) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
     let query = `
       SELECT 
         u.id, u.name, u.email, u.role, u.mobile, u.position,

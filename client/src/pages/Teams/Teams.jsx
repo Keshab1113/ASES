@@ -1,95 +1,350 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { 
+  Card, 
+  CardHeader, 
+  CardContent,
+  CardTitle,
+  CardDescription
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Users,
+  Plus,
+  Building,
+  Eye,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  UserPlus
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import api from "../../api/axios";
 
 export default function Teams() {
-  // In real flow, groupId comes from route param
-  // /groups/:groupId/teams
-  const { groupId } = useParams();
+  // const { groupId } = useParams();
+  const groupId = window.location.pathname.split('/').pop();
+  const navigate = useNavigate();
+  const [teams, setTeams] = useState([]);
+  const [group, setGroup] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+  
+  const [newTeam, setNewTeam] = useState({
+    name: "",
+    description: "",
+    group_id: groupId
+  });
 
-  // TEMP demo data (replace with API)
-  const [teams, setTeams] = useState([
-    { id: 1, name: "Warehouse Team", status: "active" },
-    { id: 2, name: "Maintenance Team", status: "active" },
-  ]);
+  useEffect(() => {
+    if (groupId) {
+      fetchGroupDetails();
+      fetchTeams();
+    }
+  }, [groupId]);
 
-  const [newTeam, setNewTeam] = useState("");
+  const fetchGroupDetails = async () => {
+    try {
+      const response = await api.get(`/groups/${groupId}`);
+      setGroup(response.data.data);
+    } catch (error) {
+      console.error("Error fetching group details:", error);
+      showMessage("error", "Failed to fetch group details");
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/groups/${groupId}/teams`);
+      setTeams(response.data.data);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      showMessage("error", "Failed to fetch teams");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreate = async () => {
-    if (!newTeam) return;
-
-    // Backend:
-    // POST /api/groups/:groupId/teams
-    setTeams([
-      ...teams,
-      { id: Date.now(), name: newTeam, status: "active" },
-    ]);
-
-    setNewTeam("");
+    try {
+      const response = await api.post("/teams", newTeam);
+      
+      showMessage("success", response.data.message);
+      setDialogOpen(false);
+      setNewTeam({ name: "", description: "", group_id: groupId });
+      fetchTeams();
+    } catch (error) {
+      console.error("Error creating team:", error);
+      showMessage("error", error.response?.data?.message || "Failed to create team");
+    }
   };
+
+  const handleStatusUpdate = async (teamId, status) => {
+    try {
+      await api.patch(`/teams/${teamId}/status`, { status });
+      
+      showMessage("success", `Team ${status === 'active' ? 'activated' : 'deactivated'}`);
+      fetchTeams();
+    } catch (error) {
+      console.error("Error updating team status:", error);
+      showMessage("error", error.response?.data?.message || "Failed to update team status");
+    }
+  };
+
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+  };
+
+  const getStatusBadge = (status) => {
+    const colors = {
+      active: "bg-green-100 text-green-800 hover:bg-green-100",
+      inactive: "bg-gray-100 text-gray-800 hover:bg-gray-100"
+    };
+
+    return (
+      <Badge className={`${colors[status]} capitalize`}>
+        {status}
+      </Badge>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-2 text-sm text-slate-500">Loading teams...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Message Alert */}
+      {message.text && (
+        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          {message.text}
+        </div>
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Teams</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage teams under this group
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">Teams</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <Building className="w-4 h-4 text-slate-400" />
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {group?.name} • {group?.code}
+            </p>
+          </div>
+        </div>
+        
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              Create Team
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Team</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Team Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter team name"
+                  value={newTeam.name}
+                  onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Enter team description"
+                  value={newTeam.description}
+                  onChange={(e) => setNewTeam({...newTeam, description: e.target.value})}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreate} disabled={!newTeam.name.trim()}>
+                Create Team
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Create Team */}
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold">Create New Team</h2>
-        </CardHeader>
-        <CardContent className="flex gap-3">
-          <Input
-            placeholder="Team name"
-            value={newTeam}
-            onChange={(e) => setNewTeam(e.target.value)}
-          />
-          <Button onClick={handleCreate}>Create</Button>
-        </CardContent>
-      </Card>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Total Teams</p>
+                <p className="text-2xl font-bold">{teams.length}</p>
+              </div>
+              <Users className="w-8 h-8 text-sky-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Active Teams</p>
+                <p className="text-2xl font-bold">
+                  {teams.filter(t => t.status === 'active').length}
+                </p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Total Members</p>
+                <p className="text-2xl font-bold">
+                  {teams.reduce((sum, team) => sum + (team.user_count || 0), 0)}
+                </p>
+              </div>
+              <UserPlus className="w-8 h-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Teams List */}
+      {/* Teams Table */}
       <Card>
         <CardHeader>
-          <h2 className="font-semibold">Teams List</h2>
+          <CardTitle>Teams in {group?.name}</CardTitle>
+          <CardDescription>
+            View and manage all teams under this group
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr>
-                <th className="py-2">Team Name</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teams.map((team) => (
-                <tr key={team.id} className="border-t">
-                  <td className="py-2">{team.name}</td>
-                  <td>
-                    <span className="text-green-600 capitalize">
-                      {team.status}
-                    </span>
-                  </td>
-                  <td className="flex gap-2 py-2">
-                    <Button variant="outline" size="sm">
-                      View Users
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Dashboard
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Team Name</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Members</TableHead>
+                <TableHead>Admin</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {teams.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                    No teams found. Create your first team.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                teams.map((team) => (
+                  <TableRow key={team.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-slate-400" />
+                        {team.name}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                        {team.code}
+                      </code>
+                    </TableCell>
+                    <TableCell>{team.user_count || 0}</TableCell>
+                    <TableCell>
+                      {team.admin_name ? (
+                        <div className="text-sm">
+                          <p>{team.admin_name}</p>
+                          <p className="text-xs text-slate-500">{team.admin_email}</p>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(team.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/teams/${team.id}/users`)}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Users
+                          </DropdownMenuItem>
+                          {team.status === 'active' ? (
+                            <DropdownMenuItem 
+                              onClick={() => handleStatusUpdate(team.id, 'inactive')}
+                              className="text-red-600"
+                            >
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Deactivate
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem 
+                              onClick={() => handleStatusUpdate(team.id, 'active')}
+                              className="text-green-600"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Activate
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

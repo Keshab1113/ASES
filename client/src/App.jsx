@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import AppShell from "./layout/AppShell";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -16,91 +16,141 @@ import ProfilePage from "./pages/ProfilePage/ProfilePage";
 import Groups from "./pages/Groups/Groups";
 import Teams from "./pages/Teams/Teams";
 import Users from "./pages/Users/Users";
+import AdminDashboard from "./pages/UserManagementAdminDashboard/UserManagementAdminDashboard";
+import TeamManagement from "./pages/Teams/TeamManagement";
+import UserManagement from "./pages/UserManagement/UserManagement";
+import PendingApprovals from "./pages/PendingApprovals/PendingApprovals";
 
 function App() {
-  // 🔐 TEMP: mock auth (replace with real auth later)
-  const [user] = useState({
-    name: "Amit Sharma",
-    role: "super_admin", // change to test roles
-  });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem("token");
+    if (token) {
+      // For demo, decode token
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        setUser({
+          id: payload.id,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+          group_id: payload.group_id,
+          team_id: payload.team_id,
+          is_approved: payload.is_approved,
+        });
+      } catch (error) {
+        console.error("Error decoding token:", error);
+        localStorage.removeItem("token");
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const handleLogin = (userData, token) => {
+    localStorage.setItem("token", token);
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-lg text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
       {/* ---------- PUBLIC ROUTES ---------- */}
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<Login onLogin={handleLogin} />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/" element={<Landing />} />
+
       {/* ---------- PROTECTED ROUTES ---------- */}
       <Route element={<ProtectedRoute user={user} />}>
+        {/* All app routes */}
         <Route
           path="/app"
-          element={
-            <AppShell user={user}>
-              <Home user={user} />
-            </AppShell>
-          }
-        />
+          element={<AppShell user={user} onLogout={handleLogout} />}
+        >
+          <Route index element={<Home user={user} />} />
+          <Route path="dashboard" element={<Dashboard user={user} />} />
+          <Route path="executive" element={<ExecutiveSummary user={user} />} />
+          <Route path="tasks" element={<Tasks user={user} />} />
+          <Route path="profile" element={<ProfilePage user={user} />} />
+          <Route path="admin" element={<AdminDashboard user={user} />} />
+          <Route path="users" element={<UserManagement user={user} />} />
+          <Route
+            path="pending-approvals"
+            element={<PendingApprovals user={user} />}
+          />
+        </Route>
 
-        <Route
-          path="/dashboard"
-          element={
-            <AppShell user={user}>
-              <Dashboard user={user} />
-            </AppShell>
-          }
-        />
-      </Route>
-
-      <Route
-          path="/executive"
-          element={
-            <AppShell user={user}>
-              <ExecutiveSummary />
-            </AppShell>
-          }
-        />
-
-        <Route
-          path="/tasks"
-          element={
-            <AppShell user={user}>
-              <Tasks/>
-            </AppShell>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <AppShell user={user}>
-              <ProfilePage/>
-            </AppShell>
-          }
-        />
+        {/* Standalone routes with AppShell */}
         <Route
           path="/groups"
           element={
-            <AppShell user={user}>
-              <Groups/>
+            <AppShell user={user} onLogout={handleLogout}>
+              <Groups user={user} />
             </AppShell>
           }
         />
         <Route
-          path="/teams"
+          path="/groups/create"
           element={
-            <AppShell user={user}>
-              <Teams/>
+            <AppShell user={user} onLogout={handleLogout}>
+              <div className="p-8">
+                <h1 className="text-2xl font-bold mb-4">Create New Group</h1>
+                {/* Add your create group form here */}
+              </div>
             </AppShell>
           }
         />
         <Route
           path="/users"
           element={
-            <AppShell user={user}>
-              <Users/>
+            <AppShell user={user} onLogout={handleLogout}>
+              <UserManagement user={user} />
             </AppShell>
           }
         />
+        <Route
+          path="/pending-approvals"
+          element={
+            <AppShell user={user} onLogout={handleLogout}>
+              <PendingApprovals user={user} />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/groups/:groupId/teams"
+          element={
+            <AppShell user={user} onLogout={handleLogout}>
+              <TeamManagement user={user} />
+            </AppShell>
+          }
+        />
+        <Route
+          path="/teams/:teamId/users"
+          element={
+            <AppShell user={user} onLogout={handleLogout}>
+              <Users user={user} />
+            </AppShell>
+          }
+        />
+      </Route>
 
       {/* ---------- FALLBACK ---------- */}
       <Route path="*" element={<Navigate to="/" />} />

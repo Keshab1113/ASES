@@ -22,45 +22,80 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../../api/axios"; // Import axios instance
 
-export default function Login() {
+export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
+    // Basic validation
+    if (!email || !password) {
+      setError("Please enter both email and password");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      // Use axios for API call
+      const response = await api.post("/auth/login", { email, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Authentication failed");
+      if (response.data.success && response.data.token) {
+        // Store token
+        localStorage.setItem("token", response.data.token);
+        
+        // Call onLogin callback with user data
+        if (onLogin) {
+          onLogin(response.data.user, response.data.token);
+        }
+        
+        // Navigate to dashboard
+        navigate("/app");
+      } else {
+        setError(response.data.message || "Authentication failed");
       }
-
-      // Success - redirect handled by backend
     } catch (err) {
-      setError(err.message || "Invalid credentials. Please try again.");
+      // Handle axios errors
+      if (err.response) {
+        // Server responded with error status
+        const errorMessage = err.response.data.message || "Authentication failed";
+        
+        // Handle specific error cases
+        if (err.response.status === 403 && err.response.data.status === 'pending') {
+          setError("Your account is pending approval. Please contact your administrator.");
+        } else if (err.response.status === 403) {
+          setError(`Account is ${err.response.data.message?.toLowerCase()}. Please contact administrator.`);
+        } else if (err.response.status === 401) {
+          setError("Invalid email or password. Please try again.");
+        } else if (err.response.status === 404) {
+          setError("No account found with this email address.");
+        } else {
+          setError(errorMessage);
+        }
+      } else if (err.request) {
+        // Request was made but no response
+        setError("Network error. Please check your connection and try again.");
+      } else {
+        // Something else happened
+        setError(err.message || "An error occurred during login");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleDemoLogin = (role) => {
-    setEmail(`${role}@demo.ases.com`);
-    setPassword("demo@ASES123");
+    setEmail(`${role}@gmail.com`);
+    setPassword("Keshab@1234");
   };
 
   return (
@@ -257,7 +292,7 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full h-11 bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-700 hover:to-emerald-700 transition-all duration-300"
+                className="w-full cursor-pointer h-11 bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-700 hover:to-emerald-700 transition-all duration-300"
                 disabled={loading}
               >
                 {loading ? (
@@ -266,21 +301,68 @@ export default function Login() {
                     Authenticating...
                   </span>
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className="flex items-center justify-center gap-2 text-white">
                     <LogIn className="w-4 h-4" />
                     Sign in to Dashboard
                   </span>
                 )}
               </Button>
-              <h1 className="text-sm">
-                Don't have an account?{" "}
-                <Link
-                  to="/signup"
-                  className=" hover:underline hover:text-blue-700"
-                >
-                  Create account
-                </Link>
-              </h1>
+              
+              <div className="space-y-2 mt-4">
+                <p className="text-xs text-center text-slate-500 dark:text-slate-400">
+                  Demo Accounts (for testing):
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDemoLogin("super_admin")}
+                    className="text-xs"
+                  >
+                    Super Admin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDemoLogin("group_admin")}
+                    className="text-xs"
+                  >
+                    Group Admin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDemoLogin("team_admin")}
+                    className="text-xs"
+                  >
+                    Team Admin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDemoLogin("employee")}
+                    className="text-xs"
+                  >
+                    Employee
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="text-center pt-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Don't have an account?{" "}
+                  <Link
+                    to="/signup"
+                    className="text-sky-600 dark:text-sky-400 hover:underline font-medium"
+                  >
+                    Create account
+                  </Link>
+                </p>
+              </div>
             </form>
           </CardContent>
 
