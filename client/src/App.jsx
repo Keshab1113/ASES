@@ -26,6 +26,20 @@ import Analytics from "./pages/Analytics/Analytics";
 import IncidentReport from "./pages/Incidents/IncidentReport";
 import IndicatorsManagement from "./pages/Indicators/IndicatorsManagement";
 import AlertsDashboard from "./pages/Alerts/AlertsDashboard";
+import DummyDashboard from "./pages/Dummy/Dashboard";
+import DummyGroups from "./pages/Dummy/Groups";
+import DummyTeams from "./pages/Dummy/Teams";
+import DummyUsers from "./pages/Dummy/Users";
+import DummyIncidents from "./pages/Dummy/Incidents";
+import DummyIncidentDetail from "./pages/Dummy/IncidentDetail";
+import DummyTasks from "./pages/Dummy/Tasks";
+import DummyTraining from "./pages/Dummy/Training";
+import DummyInspections from "./pages/Dummy/Inspections";
+import DummyJSA from "./pages/Dummy/JSA";
+import DummyEquipment from "./pages/Dummy/Equipment";
+import DummyVehicles from "./pages/Dummy/Vehicles";
+import DummyWorkersComp from "./pages/Dummy/WorkersComp";
+import DummyAnalytics from "./pages/Dummy/Analytics";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -47,7 +61,7 @@ function App() {
           team_id: payload.team_id,
           is_approved: payload.is_approved,
           group_name: payload.group_name,
-          team_name: payload.team_name
+          team_name: payload.team_name,
         });
       } catch (error) {
         console.error("Error decoding token:", error);
@@ -98,13 +112,47 @@ function App() {
           <Route path="executive" element={<ExecutiveSummary user={user} />} />
           <Route path="tasks" element={<Tasks user={user} />} />
           <Route path="profile" element={<ProfilePage user={user} />} />
-          <Route path="user-dashboard" element={<AdminDashboard user={user} />} />
-          <Route path="alert-dashboard" element={<AlertsDashboard user={user} />} />
+          <Route
+            path="user-dashboard"
+            element={<AdminDashboard user={user} />}
+          />
+          <Route
+            path="alert-dashboard"
+            element={<AlertsDashboard user={user} />}
+          />
           <Route path="users" element={<UserManagement user={user} />} />
-          <Route path="pending-approvals" element={<PendingApprovals user={user} />} />
-          <Route path="analytics-dashboard" element={<Analytics user={user} />} />
-          <Route path="indicators-dashboard" element={<IndicatorsManagement user={user} />} />
+          <Route
+            path="pending-approvals"
+            element={<PendingApprovals user={user} />}
+          />
+          <Route
+            path="analytics-dashboard"
+            element={<Analytics user={user} />}
+          />
+          <Route
+            path="indicators-dashboard"
+            element={<IndicatorsManagement user={user} />}
+          />
         </Route>
+
+        <Route element={<ProtectedRoute user={user}/>}>
+              <Route path="/dummy" element={<AppShell user={user} onLogout={handleLogout}/>}>
+                <Route index path="dashboard" element={<DummyDashboard user={user}/>} />
+                <Route path="groups" element={<DummyGroups />} />
+                <Route path="teams" element={<DummyTeams />} />
+                <Route path="users" element={<DummyUsers />} />
+                <Route path="incidents" element={<DummyIncidents />} />
+                <Route path="incidents/:id" element={<DummyIncidentDetail />} />
+                <Route path="tasks" element={<DummyTasks />} />
+                <Route path="training" element={<DummyTraining />} />
+                <Route path="inspections" element={<DummyInspections />} />
+                <Route path="jsa" element={<DummyJSA />} />
+                <Route path="equipment" element={<DummyEquipment />} />
+                <Route path="vehicles" element={<DummyVehicles />} />
+                <Route path="workers-comp" element={<DummyWorkersComp />} />
+                <Route path="analytics" element={<DummyAnalytics />} />
+              </Route>
+            </Route>
 
         {/* Incident Report route */}
         <Route
@@ -133,7 +181,7 @@ function App() {
             </AppShell>
           }
         />
-        
+
         <Route
           path="/users"
           element={
@@ -142,7 +190,7 @@ function App() {
             </AppShell>
           }
         />
-        
+
         <Route
           path="/groups/:groupId/teams"
           element={
@@ -167,7 +215,9 @@ function App() {
             <AppShell user={user} onLogout={handleLogout}>
               <div className="p-6">
                 <h1 className="text-2xl font-bold">My Trainings</h1>
-                <p className="text-muted-foreground">Training management page</p>
+                <p className="text-muted-foreground">
+                  Training management page
+                </p>
               </div>
             </AppShell>
           }

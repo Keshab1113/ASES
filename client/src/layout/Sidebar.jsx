@@ -370,6 +370,92 @@ const navConfig = {
       path: "/system-health",
       badge: "100%",
     },
+    {
+      label: "Others Management",
+      icon: Building,
+      path: "/dummy",
+      badge: null,
+      subItems: [
+        {
+          label: "Dashboard",
+          icon: Building,
+          path: "/dummy/dashboard",
+          badge: "dummy",
+        },
+        {
+          label: "Groups",
+          icon: Building,
+          path: "/dummy/groups",
+          badge: "dummy",
+        },
+        {
+          label: "Teams",
+          icon: Users2,
+          path: "/dummy/teams",
+          badge: "dummy",
+        },
+        {
+          label: "Users",
+          icon: Building,
+          path: "/dummy/users",
+          badge: "dummy",
+        },
+        {
+          label: "Incidents",
+          icon: Users2,
+          path: "/dummy/incidents",
+          badge: "dummy",
+        },
+        {
+          label: "Tasks",
+          icon: Building,
+          path: "/dummy/tasks",
+          badge: "dummy",
+        },
+        {
+          label: "Training",
+          icon: Users2,
+          path: "/dummy/training",
+          badge: "dummy",
+        },
+        {
+          label: "Inspections",
+          icon: Building,
+          path: "/dummy/inspections",
+          badge: "dummy",
+        },
+        {
+          label: "JSA",
+          icon: Users2,
+          path: "/dummy/jsa",
+          badge: "dummy",
+        },
+        {
+          label: "Equipment",
+          icon: Building,
+          path: "/dummy/equipment",
+          badge: "dummy",
+        },
+        {
+          label: "Vehicles",
+          icon: Users2,
+          path: "/dummy/vehicles",
+          badge: "dummy",
+        },
+        {
+          label: "Workers Comp",
+          icon: Building,
+          path: "/dummy/workers-comp",
+          badge: "dummy",
+        },
+        {
+          label: "Analytics",
+          icon: Users2,
+          path: "/dummy/analytics",
+          badge: "dummy",
+        },
+      ],
+    },
   ],
 };
 
