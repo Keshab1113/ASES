@@ -67,6 +67,12 @@ const navConfig = {
       badge: "3",
     },
     {
+      label: "My Indicators",
+      icon: Target,
+      path: "/app/indicators-dashboard",
+      badge: null,
+    },
+    {
       label: "Report Incident",
       icon: AlertTriangle,
       path: "/incidents/report",
@@ -110,6 +116,12 @@ const navConfig = {
       label: "Dashboard",
       icon: LayoutDashboard,
       path: "/app/dashboard",
+      badge: null,
+    },
+    {
+      label: "Indicators Management",
+      icon: Target,
+      path: "/app/indicators-dashboard",
       badge: null,
     },
     {
@@ -188,6 +200,12 @@ const navConfig = {
       label: "Dashboard",
       icon: LayoutDashboard,
       path: "/app/dashboard",
+      badge: null,
+    },
+    {
+      label: "Indicators Management",
+      icon: Target,
+      path: "/app/indicators-dashboard",
       badge: null,
     },
     {

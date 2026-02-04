@@ -4,7 +4,18 @@ import {
   getSafetyScores, 
   runPredictiveAnalysis,
   getAlerts,
-  acknowledgeAlert 
+  acknowledgeAlert,
+  createIndicator,
+  updateIndicator,
+  deleteIndicator,
+  getIndicators,
+  getIndicatorById,
+  assignIndicator,
+  getAssignedIndicators,
+  updateAssignmentStatus,
+  getIndicatorResults,
+  shareIndicatorResult,
+  getSharedIndicatorResult
 } from '../controllers/indicators.controller.js';
 import authenticate from '../middlewares/auth.middleware.js';
 import checkRole from '../middlewares/role.middleware.js';
@@ -21,16 +32,77 @@ router.post(
   uploadAndAnalyze
 );
 
+// Indicator CRUD
+router.post(
+  '/',
+  authenticate,
+  checkRole(['super_admin', 'group_admin', 'team_admin']),
+  createIndicator
+);
+
+router.get(
+  '/',
+  authenticate,
+  getIndicators
+);
+
+router.get(
+  '/:id',
+  authenticate,
+  getIndicatorById
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  checkRole(['super_admin', 'group_admin', 'team_admin']),
+  updateIndicator
+);
+
+router.delete(
+  '/:id',
+  authenticate,
+  checkRole(['super_admin', 'group_admin', 'team_admin']),
+  deleteIndicator
+);
+
+// Assignments
+router.post(
+  '/:id/assign',
+  authenticate,
+  checkRole(['super_admin', 'group_admin', 'team_admin']),
+  assignIndicator
+);
+
+router.get(
+  '/assigned/me',
+  authenticate,
+  getAssignedIndicators
+);
+
+router.put(
+  '/assignments/:assignmentId/status',
+  authenticate,
+  updateAssignmentStatus
+);
+
+// Results
+router.get(
+  '/results/:indicatorId',
+  authenticate,
+  getIndicatorResults
+);
+
 // Safety scores
 router.get(
-  '/scores',
+  '/scores/all',
   authenticate,
   getSafetyScores
 );
 
 // Predictive analysis (admin only)
 router.post(
-  '/predictive',
+  '/predictive/run',
   authenticate,
   checkRole(['super_admin', 'group_admin']),
   runPredictiveAnalysis
@@ -38,7 +110,7 @@ router.post(
 
 // Alerts
 router.get(
-  '/alerts',
+  '/alerts/all',
   authenticate,
   getAlerts
 );
@@ -48,6 +120,19 @@ router.post(
   authenticate,
   checkRole(['super_admin', 'group_admin', 'team_admin']),
   acknowledgeAlert
+);
+
+// Share indicator result
+router.post(
+  '/results/:resultId/share',
+  authenticate,
+  shareIndicatorResult
+);
+
+// Public route for shared results
+router.get(
+  '/shared/:shareToken',
+  getSharedIndicatorResult
 );
 
 export default router;

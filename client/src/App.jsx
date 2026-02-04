@@ -40,6 +40,7 @@ import DummyEquipment from "./pages/Dummy/Equipment";
 import DummyVehicles from "./pages/Dummy/Vehicles";
 import DummyWorkersComp from "./pages/Dummy/WorkersComp";
 import DummyAnalytics from "./pages/Dummy/Analytics";
+import SharedIndicatorResult from "./pages/Indicators/SharedIndicatorResult";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -153,6 +154,8 @@ function App() {
                 <Route path="analytics" element={<DummyAnalytics />} />
               </Route>
             </Route>
+
+            <Route path="/shared-indicator/:shareToken" element={<SharedIndicatorResult />} />
 
         {/* Incident Report route */}
         <Route

@@ -198,7 +198,7 @@ export default function AlertsDashboard({ user }) {
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
           <Filter className="w-4 h-4 text-slate-500" />
-          <select className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-300">
+          <select className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-300 w-full">
             <option>Sort by: Newest</option>
             <option>Sort by: Priority</option>
             <option>Sort by: Severity</option>
