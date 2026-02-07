@@ -264,7 +264,7 @@ Assets are uploaded using a dedicated FTP streaming utility and stored as **secu
 ### Backend
 
 ```bash
-cd backend
+cd server
 npm install
 npm run dev
 ```
@@ -272,7 +272,7 @@ npm run dev
 ### Frontend
 
 ```bash
-cd frontend
+cd client
 npm install
 npm run dev
 ```
