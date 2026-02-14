@@ -16,6 +16,7 @@ import {
   getIndicatorResults,
   shareIndicatorResult,
   getSharedIndicatorResult,
+  getIndicatorDetails
 } from "../controllers/indicators.controller.js";
 import authenticate from "../middlewares/auth.middleware.js";
 import checkRole from "../middlewares/role.middleware.js";
@@ -45,6 +46,12 @@ router.put(
   authenticate,
   checkRole(["super_admin", "group_admin", "team_admin"]),
   updateIndicator,
+);
+
+router.get(
+  "/:id/details",
+  authenticate,
+  getIndicatorDetails, // You'll need to create this controller function
 );
 
 router.delete(

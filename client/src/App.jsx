@@ -44,6 +44,7 @@ import SharedIndicatorResult from "./pages/Indicators/SharedIndicatorResult";
 import SystemAdministration from "./pages/SystemAdmin/SystemAdministration/SystemAdministration";
 import CreateRolePage from "./pages/SystemAdmin/SystemAdministration/CreateRoleModal";
 import CreatePermissionPage from "./pages/SystemAdmin/SystemAdministration/CreatePermissionsModal";
+import IndicatorDetailsPage from "./pages/Indicators/IndicatorDetailsPage";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -133,10 +134,13 @@ function App() {
             path="analytics-dashboard"
             element={<Analytics user={user} />}
           />
-          <Route
-            path="indicators-dashboard"
-            element={<IndicatorsManagement user={user} />}
-          />
+          <Route path="indicators-dashboard">
+            <Route index element={<IndicatorsManagement user={user} />} />
+            <Route
+              path=":id/:type"
+              element={<IndicatorDetailsPage user={user} />}
+            />
+          </Route>
         </Route>
 
         <Route element={<ProtectedRoute user={user} />}>
@@ -404,7 +408,7 @@ function App() {
             </AppShell>
           }
         />
-        
+
         <Route
           path="/audit-logs"
           element={

@@ -1084,3 +1084,124 @@ export const acknowledgeAlert = async (req, res) => {
     });
   }
 };
+
+export const getIndicatorDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query; // 'leading' or 'lagging'
+
+    if (!type) {
+      return res.status(400).json({
+        success: false,
+        message: "Indicator type is required",
+      });
+    }
+
+    const tableName = type === "leading" ? "leading_indicators" : "lagging_indicators";
+
+    // Get indicator basic info
+    const [indicators] = await pool.execute(
+      `SELECT li.*, 
+                    u.name as created_by_name,
+                    im.group_id, im.team_id, im.created_by_role
+             FROM ${tableName} li
+             LEFT JOIN users u ON li.created_by = u.id
+             LEFT JOIN indicator_metadata im ON li.id = im.indicator_id AND im.indicator_type = ?
+             WHERE li.id = ? AND li.is_active = TRUE`,
+      [type, id],
+    );
+
+    if (indicators.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Indicator not found",
+      });
+    }
+
+    const indicator = indicators[0];
+
+    // Get current/latest value
+    const [latestMeasurement] = await pool.execute(
+      `SELECT measured_value 
+       FROM indicator_measurements 
+       WHERE indicator_id = ? AND indicator_type = ?
+       ORDER BY measurement_date DESC, recorded_at DESC 
+       LIMIT 1`,
+      [id, type]
+    );
+
+    // Get assignments with user details
+    const [assignments] = await pool.execute(
+      `SELECT ia.*, 
+                    u.name as assignee_name, 
+                    u.email as assignee_email,
+                    u.role as assignee_role,
+                    ab.name as assigned_by_name
+             FROM indicator_assignments ia
+             LEFT JOIN users u ON ia.assigned_to = u.id
+             LEFT JOIN users ab ON ia.assigned_by = ab.id
+             WHERE ia.indicator_id = ? AND ia.indicator_type = ?
+             ORDER BY ia.assigned_at DESC`,
+      [id, type],
+    );
+
+    // Get recent measurements (last 10)
+    const [recentMeasurements] = await pool.execute(
+      `SELECT im.*, 
+                    u.name as recorded_by_name,
+                    g.name as group_name,
+                    t.name as team_name
+             FROM indicator_measurements im
+             LEFT JOIN users u ON im.recorded_by = u.id
+             LEFT JOIN \`groups\` g ON im.group_id = g.id
+             LEFT JOIN teams t ON im.team_id = t.id
+             WHERE im.indicator_id = ? AND im.indicator_type = ?
+             ORDER BY im.measurement_date DESC, im.recorded_at DESC
+             LIMIT 10`,
+      [id, type],
+    );
+
+    // For lagging indicators, calculate average severity
+    let avgSeverity = null;
+    if (type === "lagging") {
+      const [severityResult] = await pool.execute(
+        `SELECT AVG(CAST(JSON_EXTRACT(metadata, '$.severity') AS DECIMAL)) as avg_severity
+         FROM indicator_measurements 
+         WHERE indicator_id = ? AND indicator_type = ? AND metadata IS NOT NULL`,
+        [id, type]
+      );
+      avgSeverity = severityResult[0]?.avg_severity;
+    }
+
+    // Get measurement statistics
+    const [stats] = await pool.execute(
+      `SELECT 
+         COUNT(*) as total_measurements,
+         MIN(measured_value) as min_value,
+         MAX(measured_value) as max_value,
+         AVG(measured_value) as avg_value
+       FROM indicator_measurements 
+       WHERE indicator_id = ? AND indicator_type = ?`,
+      [id, type]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...indicator,
+        current_value: latestMeasurement[0]?.measured_value || null,
+        assignments: assignments || [],
+        recent_measurements: recentMeasurements || [],
+        statistics: stats[0] || {},
+        avg_severity: avgSeverity,
+      },
+    });
+  } catch (error) {
+    console.error("Get indicator details error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch indicator details",
+      error: error.message,
+    });
+  }
+};

@@ -26,12 +26,12 @@ import {
 import api from "../../api/axios";
 import CreateIndicatorModal from "../../components/IndicatorManagement/CreateIndicatorModal";
 import AssignIndicatorModal from "../../components/IndicatorManagement/AssignIndicatorModal";
-import IndicatorDetailsModal from "../../components/IndicatorManagement/IndicatorDetailsModal";
 import AssignedIndicatorsList from "./AssignedIndicatorsList";
 import PermissionChecker from "../../components/SystemAdministration/PermissionChecker"
 import SafetyDashboard from "../../components/IndicatorManagement/SafetyDashboard";
 import ComplianceTracker from "../../components/Compliance/ComplianceTracker";
 import ReportGenerator from "../../components/Reporting/ReportGenerator";
+import { useNavigate } from "react-router-dom";
 
 export default function IndicatorsManagement({ user }) {
   const [indicators, setIndicators] = useState({ leading: [], lagging: [] });
@@ -45,8 +45,8 @@ export default function IndicatorsManagement({ user }) {
   const [activeTab, setActiveTab] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedIndicator, setSelectedIndicator] = useState(null);
+  const navigate = useNavigate();
 
   const canCreateIndicator = [
     "super_admin",
@@ -191,8 +191,7 @@ export default function IndicatorsManagement({ user }) {
   };
 
   const handleViewDetails = (indicator, type) => {
-    setSelectedIndicator({ ...indicator, type });
-    setShowDetailsModal(true);
+    navigate(`/app/indicators-dashboard/${indicator.id}/${type}`);
   };
 
   const handleAssignClick = (indicator, type) => {
@@ -522,17 +521,6 @@ export default function IndicatorsManagement({ user }) {
             setSelectedIndicator(null);
           }}
           onAssign={handleAssignIndicator}
-        />
-      )}
-
-      {showDetailsModal && selectedIndicator && (
-        <IndicatorDetailsModal
-          indicator={selectedIndicator}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedIndicator(null);
-          }}
-          onRefresh={fetchIndicators}
         />
       )}
     </div>
