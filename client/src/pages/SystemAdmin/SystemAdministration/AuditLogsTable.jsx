@@ -1,38 +1,17 @@
-import React, { useState, useEffect } from "react";
+// pages/SystemAdmin/SystemAdministration/AuditLogsTable.jsx
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Activity, Calendar, User, Shield, Key, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
-import api from "../../../api/axios";
+import { useAuditLogs } from "../../../hooks/useRBAC";
 
 export default function AuditLogsTable() {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get("/rbac/audit-logs?limit=100");
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setLogs(data.data || []);
-        toast.success("Audit logs refreshed");
-      }
-    } catch (error) {
-      console.error("Error fetching audit logs:", error);
-      toast.error("Failed to fetch audit logs");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: logs = [], isLoading, refetch, isRefetching } = useAuditLogs(100);
 
   const getActionBadge = (actionType) => {
     const badges = {
@@ -116,8 +95,8 @@ export default function AuditLogsTable() {
                 </option>
               ))}
             </select>
-            <Button variant="outline" onClick={fetchLogs} disabled={loading}>
-              {loading ? (
+            <Button variant="outline" onClick={() => refetch()} disabled={isLoading || isRefetching}>
+              {isRefetching ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -172,7 +151,7 @@ export default function AuditLogsTable() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {loading ? (
+            {isLoading ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto mb-4" />
                 <p className="text-sm text-muted-foreground">Loading audit logs...</p>

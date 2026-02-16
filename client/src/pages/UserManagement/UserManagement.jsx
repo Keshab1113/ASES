@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// pages/UserManagement/UserManagement.jsx
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,37 +26,23 @@ import {
   Briefcase,
   Building,
   Users,
+  Loader2,
 } from "lucide-react";
-import api from "../../api/axios";
+import { useUsers } from "../../hooks/useUsers";
 
-export default function UserManagement({ user }) {
+export default function UserManagement() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/users");
-      setUsers(response.data.data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hook
+  const { data: users = [], isLoading } = useUsers();
 
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       searchTerm === "" ||
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase());
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesFilter =
       filter === "all" ||
@@ -76,27 +63,28 @@ export default function UserManagement({ user }) {
 
     return (
       <Badge className={`${colors[role]} capitalize`}>
-        {role.replace("_", " ")}
+        {role?.replace("_", " ")}
       </Badge>
     );
   };
 
   const getStatusBadge = (status) => {
     const variants = {
-      active: "default",
-      pending: "warning",
-      inactive: "secondary",
-      rejected: "destructive",
+      active: "bg-green-100 text-green-800",
+      pending: "bg-yellow-100 text-yellow-800",
+      inactive: "bg-slate-100 text-slate-800",
+      rejected: "bg-red-100 text-red-800",
     };
 
     return (
-      <Badge variant={variants[status]} className="capitalize">
+      <Badge className={`${variants[status]} capitalize`}>
+        {status === 'pending' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
         {status}
       </Badge>
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">

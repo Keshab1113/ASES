@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Key, Plus, Loader2, Hash, FileText, Shield, ArrowLeft, Sparkles } from "lucide-react";
+// pages/SystemAdmin/SystemAdministration/CreatePermissionsModal.jsx
+import React, { useState } from "react";
+import { Key, Plus, Loader2, Hash, FileText, Shield, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,13 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
+import { usePermissions, useCreatePermission } from "../../../hooks/useRBAC";
 import { toast } from "@/hooks/use-toast";
-import api from "../../../api/axios";
 
 export default function CreatePermissionPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [groups, setGroups] = useState([]);
   const [formData, setFormData] = useState({
     permission_key: "",
     permission_name: "",
@@ -24,26 +23,16 @@ export default function CreatePermissionPage() {
     group_id: "",
   });
 
-  useEffect(() => {
-    fetchPermissionGroups();
-  }, []);
+  // React Query hooks
+  const { data: groups = [], isLoading: groupsLoading } = usePermissions();
+  const createPermissionMutation = useCreatePermission();
 
-  const fetchPermissionGroups = async () => {
-    try {
-      const response = await api.get("/rbac/permissions");
-      if (response.status === 200 && response.data?.success) {
-        const data = response.data;
-        setGroups(data.data || []);
-        // Set first group as default if available
-        if (data.data && data.data.length > 0) {
-          setFormData((prev) => ({ ...prev, group_id: data.data[0].id.toString() }));
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching permission groups:", error);
-      toast.error("Failed to fetch permission groups");
+  // Set first group as default when groups load
+  React.useEffect(() => {
+    if (groups.length > 0 && !formData.group_id) {
+      setFormData((prev) => ({ ...prev, group_id: groups[0].id.toString() }));
     }
-  };
+  }, [groups, formData.group_id]);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -61,30 +50,17 @@ export default function CreatePermissionPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    try {
-      const response = await api.post("/rbac/permissions/create", {
-        permission_key: formData.permission_key,
-        permission_name: formData.permission_name,
-        description: formData.description,
-        module: formData.module,
-        action: formData.action,
-        group_id: parseInt(formData.group_id),
-      });
+    await createPermissionMutation.mutateAsync({
+      permission_key: formData.permission_key,
+      permission_name: formData.permission_name,
+      description: formData.description,
+      module: formData.module,
+      action: formData.action,
+      group_id: parseInt(formData.group_id),
+    });
 
-      if (response.status === 200 && response.data?.success) {
-        toast.success("Permission created successfully!");
-        navigate("/system-admin");// Or your desired redirect path
-      } else {
-        toast.error(response.data?.message || "Failed to create permission");
-      }
-    } catch (error) {
-      console.error("Create permission error:", error);
-      toast.error(error.response?.data?.message || "Failed to create permission");
-    } finally {
-      setLoading(false);
-    }
+    navigate("/system-admin");
   };
 
   const actionOptions = [
@@ -101,7 +77,6 @@ export default function CreatePermissionPage() {
     "import",
   ];
 
-  // Statistics for the preview
   const getGeneratedKey = () => {
     if (formData.module && formData.action) {
       return `${formData.module.toLowerCase().replace(/\s+/g, "_")}.${formData.action.toLowerCase().replace(/\s+/g, "_")}`;
@@ -109,13 +84,22 @@ export default function CreatePermissionPage() {
     return "Enter module and action...";
   };
 
+  if (groupsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto" />
+          <p className="mt-2 text-sm text-slate-500">Loading permission groups...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen ">
-      <div className="">
+    <div className="min-h-screen">
+      <div className="max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="mb-6">
-          
-          
           <div className="flex items-center gap-4 mb-2">
             <div className="p-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white">
               <Key className="w-7 h-7" />
@@ -136,8 +120,8 @@ export default function CreatePermissionPage() {
             {/* Left Column - Form Fields */}
             <div className="lg:col-span-2 space-y-6">
               {/* Basic Information Card */}
-              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg py-0">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b pt-4">
+              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900">
                       <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -303,8 +287,8 @@ export default function CreatePermissionPage() {
             {/* Right Column - Preview & Actions */}
             <div className="space-y-6">
               {/* Preview Card */}
-              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg py-0">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b pt-4">
+              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b">
                   <CardTitle className="text-xl">Permission Preview</CardTitle>
                   <CardDescription>
                     How the permission will appear
@@ -367,18 +351,18 @@ export default function CreatePermissionPage() {
               </Card>
 
               {/* Actions Card */}
-              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg py-0">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b pt-4">
+              <Card className="border-2 border-slate-200 dark:border-slate-800 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-b">
                   <CardTitle className="text-xl">Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-4">
                   <div className="space-y-3">
                     <Button
                       type="submit"
-                      disabled={loading}
+                      disabled={createPermissionMutation.isPending}
                       className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg h-11"
                     >
-                      {loading ? (
+                      {createPermissionMutation.isPending ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Creating...
@@ -395,7 +379,7 @@ export default function CreatePermissionPage() {
                       type="button"
                       variant="outline"
                       onClick={() => navigate(-1)}
-                      disabled={loading}
+                      disabled={createPermissionMutation.isPending}
                       className="w-full h-11"
                     >
                       Cancel

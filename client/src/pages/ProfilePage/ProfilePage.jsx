@@ -1,5 +1,5 @@
+// pages/ProfilePage/ProfilePage.jsx
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   User,
   Mail,
@@ -9,7 +9,6 @@ import {
   Shield,
   Lock,
   Bell,
-  Globe,
   Award,
   Activity,
   FileText,
@@ -59,16 +58,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import api from "../../api/axios";
+import {
+  useUser,
+  useUpdateUser,
+  useChangePassword,
+  useUserActivity,
+  useUserMetrics,
+  useUpdateNotifications,
+} from "../../hooks/useUsers";
+import { toast } from "@/hooks/use-toast";
 
 export default function ProfilePage({ user: initialUser }) {
-  const [user, setUser] = useState(initialUser);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("personal");
   const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -81,6 +86,12 @@ export default function ProfilePage({ user: initialUser }) {
     language: "en",
   });
 
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
     pushNotifications: true,
@@ -90,121 +101,36 @@ export default function ProfilePage({ user: initialUser }) {
     systemMaintenance: true,
   });
 
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [safetyMetrics, setSafetyMetrics] = useState([]);
+  // React Query hooks
+  const { data: user, isLoading: userLoading } = useUser(initialUser?.id);
+  const { data: activityLogs = [] } = useUserActivity(initialUser?.id);
+  const { data: safetyMetrics = [] } = useUserMetrics(initialUser?.id);
+
+  const updateUserMutation = useUpdateUser();
+  const changePasswordMutation = useChangePassword();
+  const updateNotificationsMutation = useUpdateNotifications();
 
   useEffect(() => {
-    if (initialUser) {
-      setUser(initialUser);
-      console.log("initialUser: ", initialUser);
-
+    if (user) {
       setFormData({
-        name: initialUser.name || "",
-        email: initialUser.email || "",
-        mobile: initialUser.mobile || "",
-        position: initialUser.position || "",
-        work_location: initialUser.work_location || "",
-        bio: initialUser.bio || "",
-        timezone: initialUser.timezone || "UTC",
-        language: initialUser.language || "en",
+        name: user.name || "",
+        email: user.email || "",
+        mobile: user.mobile || "",
+        position: user.position || "",
+        work_location: user.work_location || "",
+        bio: user.bio || "",
+        timezone: user.timezone || "UTC",
+        language: user.language || "en",
       });
-
-      if (initialUser.id) {
-        fetchUserActivity();
-        fetchSafetyMetrics();
-      }
     }
-  }, [initialUser]);
-
-  const fetchUserActivity = async () => {
-    try {
-      const response = await api.get("/users/activity/data");
-      setActivityLogs(response.data.data || []);
-    } catch (error) {
-      console.error("Error fetching user activity:", error);
-      // Set default activity logs
-      setActivityLogs([
-        {
-          id: 1,
-          action: "Login",
-          description: "Logged in to ASES platform",
-          timestamp: "2 hours ago",
-          ip: "192.168.1.100",
-        },
-        {
-          id: 2,
-          action: "Profile Update",
-          description: "Updated profile information",
-          timestamp: "1 day ago",
-          ip: "192.168.1.100",
-        },
-        {
-          id: 3,
-          action: "Dashboard Access",
-          description: "Accessed safety dashboard",
-          timestamp: "2 days ago",
-          ip: "192.168.1.101",
-        },
-      ]);
-    }
-  };
-
-  const fetchSafetyMetrics = async () => {
-    try {
-      const response = await api.get(`/users/${user?.id}/metrics`);
-      setSafetyMetrics(response.data.data || []);
-    } catch (error) {
-      console.error("Error fetching safety metrics:", error);
-      // Set default safety metrics
-      setSafetyMetrics([
-        { label: "Safety Score", value: 87, target: 90, trend: "up" },
-        { label: "Training Completion", value: 92, target: 95, trend: "up" },
-        { label: "Incidents Reported", value: 5, target: 3, trend: "down" },
-        { label: "Compliance Rate", value: 94, target: 95, trend: "up" },
-      ]);
-    }
-  };
+  }, [user]);
 
   const handleSave = async () => {
-    setSaving(true);
-    setMessage({ type: "", text: "" });
-
-    try {
-      const response = await api.put(`/users/${user.id}`, formData);
-
-      if (response.data.success) {
-        // Update with full user data from response
-        setUser((prev) => ({ ...prev, ...response.data.data }));
-        setIsEditing(false);
-        showMessage("success", "Profile updated successfully");
-
-        // Refresh form data with updated values
-        setFormData({
-          name: response.data.data.name || "",
-          email: response.data.data.email || "",
-          mobile: response.data.data.mobile || "",
-          position: response.data.data.position || "",
-          work_location: response.data.data.work_location || "",
-          bio: response.data.data.bio || "",
-          timezone: response.data.data.timezone || "UTC",
-          language: response.data.data.language || "en",
-        });
-      } else {
-        showMessage(
-          "error",
-          response.data.message || "Failed to update profile",
-        );
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        "Failed to update profile";
-      showMessage("error", errorMessage);
-    } finally {
-      setSaving(false);
-    }
+    await updateUserMutation.mutateAsync({
+      id: user.id,
+      data: formData,
+    });
+    setIsEditing(false);
   };
 
   const handleCancel = () => {
@@ -223,53 +149,36 @@ export default function ProfilePage({ user: initialUser }) {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    const form = e.target;
-    const currentPassword = form.currentPassword.value;
-    const newPassword = form.newPassword.value;
-    const confirmPassword = form.confirmPassword.value;
 
-    if (newPassword !== confirmPassword) {
-      showMessage("error", "New passwords do not match");
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "New passwords do not match",
+      });
       return;
     }
 
-    setLoading(true);
-    try {
-      const response = await api.post("/users/change-password", {
-        currentPassword,
-        newPassword,
-      });
+    await changePasswordMutation.mutateAsync(passwordData);
 
-      if (response.data.success) {
-        showMessage("success", "Password changed successfully");
-        form.reset();
-      } else {
-        showMessage(
-          "error",
-          response.data.message || "Failed to change password",
-        );
-      }
-    } catch (error) {
-      console.error("Error changing password:", error);
-      showMessage(
-        "error",
-        error.response?.data?.message || "Failed to change password",
-      );
-    } finally {
-      setLoading(false);
-    }
+    setPasswordData({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
   };
 
   const handleNotificationChange = (key) => {
-    setNotifications((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
+    const newPreferences = {
+      ...notifications,
+      [key]: !notifications[key],
+    };
 
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+    setNotifications(newPreferences);
+    updateNotificationsMutation.mutate({
+      id: user.id,
+      preferences: newPreferences,
+    });
   };
 
   const getInitials = (name) => {
@@ -324,64 +233,14 @@ export default function ProfilePage({ user: initialUser }) {
   };
 
   const getOrganizationInfo = () => {
+    if (!user) return "No organization assigned";
     const parts = [];
     if (user.group_name) parts.push(user.group_name);
     if (user.team_name) parts.push(user.team_name);
     return parts.join(" • ") || "No organization assigned";
   };
 
-  // Add this useEffect to fetch complete user details if initialUser is incomplete
-  useEffect(() => {
-    const fetchFullUserDetails = async () => {
-      if (initialUser && initialUser.id) {
-        try {
-          setLoading(true);
-          const response = await api.get(`/users/${initialUser.id}`);
-          if (response.data.success) {
-            const fullUser = response.data.data;
-            setUser(fullUser);
-
-            setFormData({
-              name: fullUser.name || "",
-              email: fullUser.email || "",
-              mobile: fullUser.mobile || "",
-              position: fullUser.position || "",
-              work_location: fullUser.work_location || "",
-              bio: fullUser.bio || "",
-              timezone: fullUser.timezone || "UTC",
-              language: fullUser.language || "en",
-            });
-
-            // Fetch additional data
-            fetchUserActivity();
-            fetchSafetyMetrics();
-          }
-        } catch (error) {
-          console.error("Error fetching user details:", error);
-          // Fall back to initialUser
-          setUser(initialUser);
-          setFormData({
-            name: initialUser.name || "",
-            email: initialUser.email || "",
-            mobile: initialUser.mobile || "",
-            position: initialUser.position || "",
-            work_location: initialUser.work_location || "",
-            bio: initialUser.bio || "",
-            timezone: initialUser.timezone || "UTC",
-            language: initialUser.language || "en",
-          });
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchFullUserDetails();
-  }, [initialUser?.id]); // Only run when user.id changes
-
-  console.log("formData: ", formData);
-
-  if (loading) {
+  if (userLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -405,22 +264,6 @@ export default function ProfilePage({ user: initialUser }) {
 
   return (
     <div className="min-h-screen">
-      {/* Message Alert */}
-      {message.text && (
-        <div
-          className={`p-4 rounded-lg mb-6 ${message.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}
-        >
-          <div className="flex items-center gap-2">
-            {message.type === "success" ? (
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600" />
-            )}
-            <span>{message.text}</span>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="border-b border-slate-200 dark:border-slate-800">
         <div className="container mx-auto px-0 py-8">
@@ -498,7 +341,7 @@ export default function ProfilePage({ user: initialUser }) {
                     onClick={handleCancel}
                     variant="outline"
                     className="gap-2"
-                    disabled={saving}
+                    disabled={updateUserMutation.isPending}
                   >
                     <X className="w-4 h-4" />
                     Cancel
@@ -506,9 +349,9 @@ export default function ProfilePage({ user: initialUser }) {
                   <Button
                     onClick={handleSave}
                     className="gap-2 bg-gradient-to-r from-sky-600 to-emerald-600 text-white"
-                    disabled={saving}
+                    disabled={updateUserMutation.isPending}
                   >
-                    {saving ? (
+                    {updateUserMutation.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Saving...
@@ -654,7 +497,7 @@ export default function ProfilePage({ user: initialUser }) {
               </CardContent>
             </Card>
 
-            {/* Safety Performance - Only for approved users */}
+            {/* Safety Performance */}
             {user.is_approved && safetyMetrics.length > 0 && (
               <Card className="bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
                 <CardHeader>
@@ -925,17 +768,25 @@ export default function ProfilePage({ user: initialUser }) {
                           <div className="relative">
                             <Input
                               id="currentPassword"
-                              name="currentPassword"
-                              type={showPassword ? "text" : "password"}
+                              type={showCurrentPassword ? "text" : "password"}
+                              value={passwordData.currentPassword}
+                              onChange={(e) =>
+                                setPasswordData({
+                                  ...passwordData,
+                                  currentPassword: e.target.value,
+                                })
+                              }
                               placeholder="Enter current password"
                               required
                             />
                             <button
                               type="button"
-                              onClick={() => setShowPassword(!showPassword)}
+                              onClick={() =>
+                                setShowCurrentPassword(!showCurrentPassword)
+                              }
                               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500"
                             >
-                              {showPassword ? (
+                              {showCurrentPassword ? (
                                 <EyeOff className="w-4 h-4" />
                               ) : (
                                 <Eye className="w-4 h-4" />
@@ -947,8 +798,14 @@ export default function ProfilePage({ user: initialUser }) {
                           <Label htmlFor="newPassword">New Password</Label>
                           <Input
                             id="newPassword"
-                            name="newPassword"
                             type={showPassword ? "text" : "password"}
+                            value={passwordData.newPassword}
+                            onChange={(e) =>
+                              setPasswordData({
+                                ...passwordData,
+                                newPassword: e.target.value,
+                              })
+                            }
                             placeholder="Enter new password"
                             required
                             minLength={8}
@@ -962,20 +819,41 @@ export default function ProfilePage({ user: initialUser }) {
                           <Label htmlFor="confirmPassword">
                             Confirm New Password
                           </Label>
-                          <Input
-                            id="confirmPassword"
-                            name="confirmPassword"
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Confirm new password"
-                            required
-                          />
+                          <div className="relative">
+                            <Input
+                              id="confirmPassword"
+                              type={showConfirmPassword ? "text" : "password"}
+                              value={passwordData.confirmPassword}
+                              onChange={(e) =>
+                                setPasswordData({
+                                  ...passwordData,
+                                  confirmPassword: e.target.value,
+                                })
+                              }
+                              placeholder="Confirm new password"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowConfirmPassword(!showConfirmPassword)
+                              }
+                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500"
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="w-4 h-4" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <Button
                           type="submit"
                           className="gap-2"
-                          disabled={loading}
+                          disabled={changePasswordMutation.isPending}
                         >
-                          {loading ? (
+                          {changePasswordMutation.isPending ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
                               Updating...
@@ -1063,6 +941,7 @@ export default function ProfilePage({ user: initialUser }) {
                               onCheckedChange={() =>
                                 handleNotificationChange(key)
                               }
+                              disabled={updateNotificationsMutation.isPending}
                             />
                           </div>
                         ))}

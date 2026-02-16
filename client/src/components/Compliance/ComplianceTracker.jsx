@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// components/Compliance/ComplianceTracker.jsx
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +14,18 @@ import {
   Calendar, 
   AlertTriangle,
   Download,
-  Upload
+  Upload,
+  Loader2,
+  Plus
 } from 'lucide-react';
-import api from "../../api/axios";
+import { 
+  useComplianceItems, 
+  useCreateComplianceItem, 
+  useUpdateComplianceStatus,
+  useUploadEvidence 
+} from '../../hooks/useCompliance';
 
 const ComplianceTracker = ({ user }) => {
-  const [complianceItems, setComplianceItems] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({
     regulation: '',
@@ -29,24 +35,16 @@ const ComplianceTracker = ({ user }) => {
     notes: ''
   });
 
-  useEffect(() => {
-    fetchComplianceItems();
-  }, []);
-
-  const fetchComplianceItems = async () => {
-    try {
-      const response = await api.get('/compliance', {
-        params: { groupId: user.group_id }
-      });
-      if (response.data?.success) {
-        setComplianceItems(response.data.data);
-      }
-    } catch (error) {
-      console.error('Compliance fetch error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks
+  const { 
+    data: complianceItems = [], 
+    isLoading, 
+    refetch 
+  } = useComplianceItems({ groupId: user.group_id });
+  
+  const createMutation = useCreateComplianceItem();
+  const updateStatusMutation = useUpdateComplianceStatus();
+  const uploadMutation = useUploadEvidence();
 
   const regulations = [
     'OSHA 29 CFR 1910',
@@ -61,52 +59,32 @@ const ComplianceTracker = ({ user }) => {
 
   const handleAddCompliance = async (e) => {
     e.preventDefault();
-    try {
-      await api.post('/compliance', {
-        ...newItem,
-        group_id: user.group_id,
-        team_id: user.team_id,
-        assigned_to: user.id
-      });
-      setShowAddForm(false);
-      setNewItem({
-        regulation: '',
-        requirement: '',
-        due_date: '',
-        status: 'pending',
-        notes: ''
-      });
-      fetchComplianceItems();
-      alert('Compliance item added successfully');
-    } catch (error) {
-      console.error('Add compliance error:', error);
-      alert('Failed to add compliance item');
-    }
+    
+    await createMutation.mutateAsync({
+      ...newItem,
+      group_id: user.group_id,
+      team_id: user.team_id,
+      assigned_to: user.id
+    });
+    
+    setShowAddForm(false);
+    setNewItem({
+      regulation: '',
+      requirement: '',
+      due_date: '',
+      status: 'pending',
+      notes: ''
+    });
+    refetch();
   };
 
-  const handleUpdateStatus = async (id, status) => {
-    try {
-      await api.put(`/compliance/${id}/status`, { status });
-      fetchComplianceItems();
-    } catch (error) {
-      console.error('Update status error:', error);
-    }
+  const handleUpdateStatus = (id, status) => {
+    updateStatusMutation.mutate({ id, status });
   };
 
-  const handleUploadEvidence = async (id, file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('compliance_id', id);
-
-    try {
-      await api.post('/compliance/upload-evidence', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      fetchComplianceItems();
-      alert('Evidence uploaded successfully');
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload evidence');
+  const handleUploadEvidence = (id, file) => {
+    if (file) {
+      uploadMutation.mutate({ id, file });
     }
   };
 
@@ -130,8 +108,12 @@ const ComplianceTracker = ({ user }) => {
     }
   };
 
-  if (loading) {
-    return <div>Loading compliance data...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-sky-600 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -143,8 +125,12 @@ const ComplianceTracker = ({ user }) => {
             Track regulatory compliance requirements and deadlines
           </p>
         </div>
-        <Button onClick={() => setShowAddForm(true)}>
-          <FileText className="w-4 h-4 mr-2" />
+        <Button onClick={() => setShowAddForm(true)} disabled={createMutation.isPending}>
+          {createMutation.isPending ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4 mr-2" />
+          )}
           Add Compliance Item
         </Button>
       </div>
@@ -178,6 +164,7 @@ const ComplianceTracker = ({ user }) => {
                     value={newItem.requirement}
                     onChange={(e) => setNewItem({...newItem, requirement: e.target.value})}
                     placeholder="Specific requirement"
+                    required
                   />
                 </div>
               </div>
@@ -189,6 +176,7 @@ const ComplianceTracker = ({ user }) => {
                     type="date"
                     value={newItem.due_date}
                     onChange={(e) => setNewItem({...newItem, due_date: e.target.value})}
+                    required
                   />
                 </div>
 
@@ -225,8 +213,15 @@ const ComplianceTracker = ({ user }) => {
                 <Button type="button" variant="outline" onClick={() => setShowAddForm(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
-                  Add Compliance Item
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Compliance Item'
+                  )}
                 </Button>
               </div>
             </form>
@@ -241,6 +236,14 @@ const ComplianceTracker = ({ user }) => {
             <CardContent className="p-12 text-center">
               <FileText className="w-16 h-16 text-slate-400 mx-auto mb-4" />
               <p className="text-muted-foreground">No compliance items yet</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setShowAddForm(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Your First Item
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -276,13 +279,14 @@ const ComplianceTracker = ({ user }) => {
                 )}
 
                 <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {['pending', 'in_progress', 'compliant', 'non_compliant'].map((status) => (
                       <Button
                         key={status}
                         size="sm"
                         variant={item.status === status ? "default" : "outline"}
                         onClick={() => handleUpdateStatus(item.id, status)}
+                        disabled={updateStatusMutation.isPending}
                       >
                         {status.replace('_', ' ')}
                       </Button>
@@ -290,18 +294,22 @@ const ComplianceTracker = ({ user }) => {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="gap-1">
-                      <Upload className="w-3 h-3" />
-                      <input
-                        type="file"
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        onChange={(e) => handleUploadEvidence(item.id, e.target.files[0])}
-                      />
-                      Evidence
-                    </Button>
+                    <div className="relative">
+                      <Button size="sm" variant="outline" className="gap-1">
+                        <Upload className="w-3 h-3" />
+                        <input
+                          type="file"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          onChange={(e) => handleUploadEvidence(item.id, e.target.files[0])}
+                          disabled={uploadMutation.isPending}
+                        />
+                        Evidence
+                      </Button>
+                    </div>
                     {item.evidence_url && (
                       <Button size="sm" variant="outline" className="gap-1">
                         <Download className="w-3 h-3" />
+                        <a href={item.evidence_url} download className="absolute inset-0 opacity-0" />
                         Evidence
                       </Button>
                     )}

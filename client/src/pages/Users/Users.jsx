@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// pages/Teams/Users.jsx
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   Card, 
@@ -38,7 +39,8 @@ import {
   AlertCircle,
   MoreVertical,
   Shield,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,94 +50,54 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import api from "../../api/axios";
+import { useTeam, useTeamUsers } from "../../hooks/useTeams";
+import { useApproveUser, useRejectUser, useUpdateUserStatus } from "../../hooks/useUsers";
+import { toast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
   const { teamId } = useParams();
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [team, setTeam] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [approveDialog, setApproveDialog] = useState(false);
   const [rejectDialog, setRejectDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [message, setMessage] = useState({ type: "", text: "" });
 
-  useEffect(() => {
-    if (teamId) {
-      fetchTeamDetails();
-      fetchUsers();
-    }
-  }, [teamId]);
+  // React Query hooks
+  const { 
+    data: team, 
+    isLoading: teamLoading 
+  } = useTeam(teamId);
+  
+  const { 
+    data: users = [], 
+    isLoading: usersLoading,
+    refetch: refetchUsers 
+  } = useTeamUsers(teamId);
 
-  const fetchTeamDetails = async () => {
-    try {
-      const response = await api.get(`/teams/${teamId}`);
-      setTeam(response.data.data);
-    } catch (error) {
-      console.error("Error fetching team details:", error);
-      showMessage("error", "Failed to fetch team details");
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/teams/${teamId}/users`);
-      setUsers(response.data.data);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      showMessage("error", "Failed to fetch users");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const approveMutation = useApproveUser();
+  const rejectMutation = useRejectUser();
+  const updateStatusMutation = useUpdateUserStatus();
 
   const handleApprove = async () => {
-    try {
-      await api.post(`/users/${selectedUser.id}/approve`);
-      
-      showMessage("success", "User approved successfully");
-      setApproveDialog(false);
-      setSelectedUser(null);
-      fetchUsers();
-    } catch (error) {
-      console.error("Error approving user:", error);
-      showMessage("error", error.response?.data?.message || "Failed to approve user");
-    }
+    await approveMutation.mutateAsync(selectedUser.id);
+    setApproveDialog(false);
+    setSelectedUser(null);
+    refetchUsers();
   };
 
   const handleReject = async () => {
-    try {
-      await api.post(`/users/${selectedUser.id}/reject`, { reason: rejectReason });
-      
-      showMessage("success", "User rejected successfully");
-      setRejectDialog(false);
-      setSelectedUser(null);
-      setRejectReason("");
-      fetchUsers();
-    } catch (error) {
-      console.error("Error rejecting user:", error);
-      showMessage("error", error.response?.data?.message || "Failed to reject user");
-    }
+    await rejectMutation.mutateAsync({ 
+      id: selectedUser.id, 
+      reason: rejectReason 
+    });
+    setRejectDialog(false);
+    setSelectedUser(null);
+    setRejectReason("");
+    refetchUsers();
   };
 
-  const handleStatusUpdate = async (userId, status) => {
-    try {
-      await api.patch(`/users/${userId}/status`, { status });
-      
-      showMessage("success", `User ${status === 'active' ? 'activated' : 'deactivated'}`);
-      fetchUsers();
-    } catch (error) {
-      console.error("Error updating user status:", error);
-      showMessage("error", error.response?.data?.message || "Failed to update user status");
-    }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+  const handleStatusUpdate = (userId, status) => {
+    updateStatusMutation.mutate({ id: userId, status });
   };
 
   const getRoleBadge = (role) => {
@@ -148,7 +110,7 @@ export default function UsersPage() {
 
     return (
       <Badge className={`${colors[role]} capitalize`}>
-        {role.replace('_', ' ')}
+        {role?.replace('_', ' ')}
       </Badge>
     );
   };
@@ -178,11 +140,13 @@ export default function UsersPage() {
     );
   };
 
-  if (loading) {
+  const isLoading = teamLoading || usersLoading;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <Loader2 className="w-8 h-8 text-sky-600 animate-spin mx-auto" />
           <p className="mt-2 text-sm text-slate-500">Loading users...</p>
         </div>
       </div>
@@ -191,13 +155,6 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Message Alert */}
-      {message.text && (
-        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Team Members</h1>
@@ -366,6 +323,7 @@ export default function UsersPage() {
                                   setApproveDialog(true);
                                 }}
                                 className="text-green-600"
+                                disabled={approveMutation.isPending}
                               >
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 Approve
@@ -376,6 +334,7 @@ export default function UsersPage() {
                                   setRejectDialog(true);
                                 }}
                                 className="text-red-600"
+                                disabled={rejectMutation.isPending}
                               >
                                 <XCircle className="w-4 h-4 mr-2" />
                                 Reject
@@ -386,6 +345,7 @@ export default function UsersPage() {
                             <DropdownMenuItem 
                               onClick={() => handleStatusUpdate(user.id, 'inactive')}
                               className="text-red-600"
+                              disabled={updateStatusMutation.isPending}
                             >
                               <XCircle className="w-4 h-4 mr-2" />
                               Deactivate
@@ -395,6 +355,7 @@ export default function UsersPage() {
                             <DropdownMenuItem 
                               onClick={() => handleStatusUpdate(user.id, 'active')}
                               className="text-green-600"
+                              disabled={updateStatusMutation.isPending}
                             >
                               <CheckCircle className="w-4 h-4 mr-2" />
                               Activate
@@ -446,9 +407,22 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setApproveDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Approve User
+            <Button 
+              onClick={handleApprove} 
+              className="bg-green-600 hover:bg-green-700"
+              disabled={approveMutation.isPending}
+            >
+              {approveMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Approve User
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -496,10 +470,19 @@ export default function UsersPage() {
             <Button 
               onClick={handleReject} 
               variant="destructive"
-              disabled={!rejectReason.trim()}
+              disabled={!rejectReason.trim() || rejectMutation.isPending}
             >
-              <XCircle className="w-4 h-4 mr-2" />
-              Reject User
+              {rejectMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Reject User
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

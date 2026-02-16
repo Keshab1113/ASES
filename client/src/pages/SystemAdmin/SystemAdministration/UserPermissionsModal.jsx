@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// pages/SystemAdmin/SystemAdministration/UserPermissionsModal.jsx
+import React, { useState } from "react";
 import { X, User, Key, Plus, Trash2, Calendar, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
-import api from "../../../api/axios";
+import { 
+  useUserPermissions, 
+  useGrantPermission, 
+  useRevokePermission 
+} from "../../../hooks/useRBAC";
 
 export default function UserPermissionsModal({ user, permissions, onClose }) {
-  const [userPermissions, setUserPermissions] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [showGrant, setShowGrant] = useState(false);
   const [grantForm, setGrantForm] = useState({
     permissionId: "",
@@ -19,84 +21,53 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
     expiresAt: "",
   });
 
-  useEffect(() => {
-    if (user) {
-      fetchUserPermissions();
-    }
-  }, [user]);
+  // React Query hooks
+  const { 
+    data: userPermissions = [], 
+    isLoading: permissionsLoading,
+    refetch: refetchPermissions
+  } = useUserPermissions(user?.id);
 
-  const fetchUserPermissions = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/rbac/permissions/user/${user.id}`);
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setUserPermissions(data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching user permissions:", error);
-      toast.error("Failed to fetch user permissions");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const grantMutation = useGrantPermission();
+  const revokeMutation = useRevokePermission();
 
   const handleGrant = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await api.post("/rbac/permissions/grant", {
-        userId: user.id,
-        permissionId: parseInt(grantForm.permissionId),
-        reason: grantForm.reason,
-        expiresAt: grantForm.expiresAt || null,
-      });
 
-      if (response.status === 200 && response.data?.success) {
-        toast.success("Permission granted successfully!");
-        setShowGrant(false);
-        setGrantForm({ permissionId: "", reason: "", expiresAt: "" });
-        fetchUserPermissions();
-      } else {
-        const data = await response.data;
-        toast.error(data.message || "Failed to grant permission");
-      }
-    } catch (error) {
-      console.error("Grant error:", error);
-      toast.error(error.response?.data?.message || "Failed to grant permission");
-    } finally {
-      setLoading(false);
-    }
+    await grantMutation.mutateAsync({
+      userId: user.id,
+      permissionId: parseInt(grantForm.permissionId),
+      reason: grantForm.reason,
+      expiresAt: grantForm.expiresAt || null,
+    });
+
+    setShowGrant(false);
+    setGrantForm({ permissionId: "", reason: "", expiresAt: "" });
+    refetchPermissions();
   };
 
   const handleRevoke = async (permissionKey) => {
     if (!confirm("Are you sure you want to revoke this permission override?")) return;
 
-    try {
-      const allPerms = permissions.flatMap((g) => g.permissions || []);
-      const perm = allPerms.find((p) => p.permission_key === permissionKey);
+    const allPerms = permissions.flatMap((g) => g.permissions || []);
+    const perm = allPerms.find((p) => p.permission_key === permissionKey);
 
-      if (!perm) return;
+    if (!perm) return;
 
-      const response = await api.post("/rbac/permissions/revoke", {
-        userId: user.id,
-        permissionId: perm.id,
-        reason: "Revoked by admin",
-      });
+    await revokeMutation.mutateAsync({
+      userId: user.id,
+      permissionId: perm.id,
+      reason: "Revoked by admin",
+    });
 
-      if (response.status === 200 && response.data?.success) {
-        toast.success("Permission revoked successfully!");
-        fetchUserPermissions();
-      }
-    } catch (error) {
-      console.error("Revoke error:", error);
-      toast.error(error.response?.data?.message || "Failed to revoke permission");
-    }
+    refetchPermissions();
   };
 
   const allPermissions = permissions.flatMap((g) => g.permissions || []);
   const overridePermissions = userPermissions.filter((p) => p.source === "override");
   const rolePermissions = userPermissions.filter((p) => p.source === "role");
+
+  const isLoading = permissionsLoading || grantMutation.isPending || revokeMutation.isPending;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -117,6 +88,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              disabled={isLoading}
             >
               <X className="w-6 h-6" />
             </button>
@@ -139,6 +111,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
                   onClick={() => setShowGrant(!showGrant)}
                   variant={showGrant ? "outline" : "default"}
                   className={!showGrant ? "bg-gradient-to-r from-purple-600 to-blue-600" : ""}
+                  disabled={isLoading}
                 >
                   {showGrant ? (
                     "Cancel"
@@ -164,6 +137,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
                       }
                       className="w-full p-2 border-2 border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900"
                       required
+                      disabled={isLoading}
                     >
                       <option value="">Select permission...</option>
                       {allPermissions.map((perm) => (
@@ -185,6 +159,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
                       rows={2}
                       required
                       className="resize-none"
+                      disabled={isLoading}
                     />
                   </div>
 
@@ -196,6 +171,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
                       onChange={(e) =>
                         setGrantForm({ ...grantForm, expiresAt: e.target.value })
                       }
+                      disabled={isLoading}
                     />
                     <p className="text-xs text-muted-foreground">
                       Leave empty for permanent override
@@ -204,10 +180,10 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
 
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={isLoading}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600"
                   >
-                    {loading ? (
+                    {grantMutation.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Granting...
@@ -230,7 +206,11 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
               </Badge>
             </div>
 
-            {overridePermissions.length > 0 ? (
+            {permissionsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+              </div>
+            ) : overridePermissions.length > 0 ? (
               <div className="space-y-3">
                 {overridePermissions.map((perm) => (
                   <Card
@@ -263,6 +243,7 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
                           variant="ghost"
                           onClick={() => handleRevoke(perm.permission_key)}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          disabled={revokeMutation.isPending}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -293,7 +274,11 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
               </Badge>
             </div>
 
-            {rolePermissions.length > 0 ? (
+            {permissionsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+              </div>
+            ) : rolePermissions.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {rolePermissions.map((perm) => (
                   <div
@@ -328,7 +313,12 @@ export default function UserPermissionsModal({ user, permissions, onClose }) {
         </div>
 
         <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-700 p-6 flex justify-end rounded-b-2xl">
-          <Button onClick={onClose} size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600">
+          <Button 
+            onClick={onClose} 
+            size="lg" 
+            className="bg-gradient-to-r from-blue-600 to-purple-600"
+            disabled={isLoading}
+          >
             Close
           </Button>
         </div>

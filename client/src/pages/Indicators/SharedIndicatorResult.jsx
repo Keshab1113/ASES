@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// pages/Indicators/SharedIndicatorResult.jsx
+import React from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,48 +12,32 @@ import {
   Activity,
   Share2,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
-import api from "../../api/axios";
+import { useSharedResult } from "../../hooks/useIndicators";
 
 export default function SharedIndicatorResult() {
   const { shareToken } = useParams();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  
+  const { 
+    data: sharedData, 
+    isLoading, 
+    error, 
+    isError 
+  } = useSharedResult(shareToken);
 
-  useEffect(() => {
-    fetchSharedResult();
-  }, [shareToken]);
-
-  const fetchSharedResult = async () => {
-    try {
-      const response = await api.get(`/indicators/shared/${shareToken}`);
-      if (response.status === 200 && response.data?.success) {
-        const result = await response.data;
-        setData(result.data);
-      } else {
-        setError("This shared result is not available or has expired");
-      }
-    } catch (error) {
-      console.error("Error fetching shared result:", error);
-      setError("Failed to load shared result");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <Loader2 className="w-12 h-12 text-sky-600 animate-spin mx-auto mb-4" />
           <p className="text-muted-foreground">Loading shared result...</p>
         </div>
       </div>
     );
   }
 
-  if (error || !data) {
+  if (isError || !sharedData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
         <Card className="max-w-md w-full">
@@ -60,7 +45,7 @@ export default function SharedIndicatorResult() {
             <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Result Not Available</h2>
             <p className="text-muted-foreground">
-              {error || "This shared result could not be found or has expired."}
+              {error?.message || "This shared result could not be found or has expired."}
             </p>
           </CardContent>
         </Card>
@@ -68,7 +53,7 @@ export default function SharedIndicatorResult() {
     );
   }
 
-  const { indicator, measurement, shared_at } = data;
+  const { indicator, measurement, shared_at } = sharedData;
   const isLeading = measurement.measurement_date; // Simple check
 
   return (

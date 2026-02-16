@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// pages/PendingApprovals/PendingApprovals.jsx
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Card, 
@@ -43,10 +44,9 @@ import {
   AlertCircle,
   User,
   Calendar,
-  ChevronRight,
   RefreshCw,
   Shield,
-  UserPlus
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -54,111 +54,58 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import api from "../../api/axios";
+import { usePendingApprovals, useApproveUser, useRejectUser } from "../../hooks/useUsers";
 
 export default function PendingApprovals({ user }) {
   const navigate = useNavigate();
-  const [pendingUsers, setPendingUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [approveDialog, setApproveDialog] = useState(false);
   const [rejectDialog, setRejectDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [message, setMessage] = useState({ type: "", text: "" });
-  const [stats, setStats] = useState({
-    total: 0,
-    employees: 0,
-    teamAdmins: 0,
-    groupAdmins: 0
-  });
 
-  useEffect(() => {
-    fetchPendingApprovals();
-  }, []);
-
-  const fetchPendingApprovals = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/users/pending");
-      setPendingUsers(response.data.data);
-      
-      // Calculate stats
-      const employees = response.data.data.filter(u => u.role === 'employee').length;
-      const teamAdmins = response.data.data.filter(u => u.role === 'team_admin').length;
-      const groupAdmins = response.data.data.filter(u => u.role === 'group_admin').length;
-      
-      setStats({
-        total: response.data.data.length,
-        employees,
-        teamAdmins,
-        groupAdmins
-      });
-      
-      showMessage("success", `Loaded ${response.data.data.length} pending approvals`);
-    } catch (error) {
-      console.error("Error fetching pending approvals:", error);
-      showMessage("error", "Failed to fetch pending approvals");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks
+  const { 
+    data: pendingUsers = [], 
+    isLoading, 
+    refetch 
+  } = usePendingApprovals();
+  
+  const approveMutation = useApproveUser();
+  const rejectMutation = useRejectUser();
 
   const handleApprove = async () => {
-    try {
-      await api.post(`/users/${selectedUser.id}/approve`);
-      
-      showMessage("success", `User ${selectedUser.name} approved successfully`);
-      setApproveDialog(false);
-      setSelectedUser(null);
-      fetchPendingApprovals();
-    } catch (error) {
-      console.error("Error approving user:", error);
-      showMessage("error", error.response?.data?.message || "Failed to approve user");
-    }
+    await approveMutation.mutateAsync(selectedUser.id);
+    setApproveDialog(false);
+    setSelectedUser(null);
+    refetch();
   };
 
   const handleReject = async () => {
-    try {
-      await api.post(`/users/${selectedUser.id}/reject`, { reason: rejectReason });
-      
-      showMessage("success", `User ${selectedUser.name} rejected`);
-      setRejectDialog(false);
-      setSelectedUser(null);
-      setRejectReason("");
-      fetchPendingApprovals();
-    } catch (error) {
-      console.error("Error rejecting user:", error);
-      showMessage("error", error.response?.data?.message || "Failed to reject user");
-    }
+    await rejectMutation.mutateAsync({ 
+      id: selectedUser.id, 
+      reason: rejectReason 
+    });
+    setRejectDialog(false);
+    setSelectedUser(null);
+    setRejectReason("");
+    refetch();
   };
 
-  const handleBulkApprove = async (userIds) => {
-    try {
-      // This would be a bulk API endpoint
-      // For now, approve one by one
-      for (const userId of userIds) {
-        await api.post(`/users/${userId}/approve`);
-      }
-      
-      showMessage("success", `${userIds.length} users approved`);
-      fetchPendingApprovals();
-    } catch (error) {
-      console.error("Error bulk approving:", error);
-      showMessage("error", "Failed to approve users");
+  const handleBulkApprove = async () => {
+    // This would be a bulk API endpoint
+    // For now, approve one by one
+    for (const user of filteredUsers) {
+      await approveMutation.mutateAsync(user.id);
     }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+    refetch();
   };
 
   const filteredUsers = pendingUsers.filter(u => {
     return searchTerm === "" || 
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.role.toLowerCase().includes(searchTerm.toLowerCase());
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.role?.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const getRoleBadge = (role) => {
@@ -183,13 +130,9 @@ export default function PendingApprovals({ user }) {
   };
 
   const getStatusBadge = (status) => {
-    const icons = {
-      pending: <Clock className="w-3 h-3 mr-1" />,
-    };
-
     return (
       <Badge variant="warning" className="capitalize flex items-center gap-1">
-        {icons[status]}
+        <Clock className="w-3 h-3 mr-1" />
         {status}
       </Badge>
     );
@@ -212,11 +155,19 @@ export default function PendingApprovals({ user }) {
     });
   };
 
-  if (loading) {
+  // Calculate stats
+  const stats = {
+    total: pendingUsers.length,
+    employees: pendingUsers.filter(u => u.role === 'employee').length,
+    teamAdmins: pendingUsers.filter(u => u.role === 'team_admin').length,
+    groupAdmins: pendingUsers.filter(u => u.role === 'group_admin').length
+  };
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <Loader2 className="w-8 h-8 text-sky-600 animate-spin mx-auto" />
           <p className="mt-2 text-sm text-slate-500">Loading pending approvals...</p>
         </div>
       </div>
@@ -225,20 +176,6 @@ export default function PendingApprovals({ user }) {
 
   return (
     <div className="space-y-6">
-      {/* Message Alert */}
-      {message.text && (
-        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          <div className="flex items-center gap-2">
-            {message.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600" />
-            )}
-            <span>{message.text}</span>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -250,19 +187,25 @@ export default function PendingApprovals({ user }) {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={fetchPendingApprovals}
+            onClick={() => refetch()}
             className="gap-2"
+            disabled={isLoading}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           {filteredUsers.length > 0 && (
             <Button
-              onClick={() => handleBulkApprove(filteredUsers.map(u => u.id))}
+              onClick={handleBulkApprove}
               className="gap-2 bg-green-600 hover:bg-green-700"
+              disabled={approveMutation.isPending}
             >
-              <CheckCircle className="w-4 h-4" />
-              Approve All
+              {approveMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
+              Approve All ({filteredUsers.length})
             </Button>
           )}
         </div>
@@ -518,6 +461,7 @@ export default function PendingApprovals({ user }) {
                             setApproveDialog(true);
                           }}
                           className="gap-1 bg-green-600 hover:bg-green-700 dark:text-white"
+                          disabled={approveMutation.isPending}
                         >
                           <CheckCircle className="w-3 h-3" />
                           Approve
@@ -530,6 +474,7 @@ export default function PendingApprovals({ user }) {
                             setRejectDialog(true);
                           }}
                           className="gap-1"
+                          disabled={rejectMutation.isPending}
                         >
                           <XCircle className="w-3 h-3" />
                           Reject
@@ -538,7 +483,6 @@ export default function PendingApprovals({ user }) {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            // Navigate to user details or team
                             if (pendingUser.team_id) {
                               navigate(`/teams/${pendingUser.team_id}/users`);
                             }
@@ -568,11 +512,15 @@ export default function PendingApprovals({ user }) {
               Approve all pending users at once
             </p>
             <Button 
-              onClick={() => handleBulkApprove(filteredUsers.map(u => u.id))}
+              onClick={handleBulkApprove}
               className="w-full gap-2 bg-green-600 hover:bg-green-700 dark:text-white"
-              disabled={filteredUsers.length === 0}
+              disabled={filteredUsers.length === 0 || approveMutation.isPending}
             >
-              <CheckCircle className="w-4 h-4" />
+              {approveMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
               Approve All ({filteredUsers.length})
             </Button>
           </CardContent>
@@ -681,8 +629,16 @@ export default function PendingApprovals({ user }) {
             <Button variant="outline" onClick={() => setApproveDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700 gap-2">
-              <CheckCircle className="w-4 h-4" />
+            <Button 
+              onClick={handleApprove} 
+              className="bg-green-600 hover:bg-green-700 gap-2"
+              disabled={approveMutation.isPending}
+            >
+              {approveMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
               Approve User
             </Button>
           </DialogFooter>
@@ -748,10 +704,14 @@ export default function PendingApprovals({ user }) {
             <Button 
               onClick={handleReject} 
               variant="destructive"
-              disabled={!rejectReason.trim()}
+              disabled={!rejectReason.trim() || rejectMutation.isPending}
               className="gap-2"
             >
-              <XCircle className="w-4 h-4" />
+              {rejectMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <XCircle className="w-4 h-4" />
+              )}
               Reject User
             </Button>
           </DialogFooter>

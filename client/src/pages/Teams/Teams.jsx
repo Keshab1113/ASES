@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// pages/Teams/Teams.jsx
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   Card, 
@@ -36,8 +37,8 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  UserPlus,
-  Filter
+  Filter,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,16 +46,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import api from "../../api/axios";
+import { useGroup, useGroupTeams } from "../../hooks/useGroups";
+import { useTeams, useCreateTeam, useUpdateTeamStatus } from "../../hooks/useTeams";
 
 export default function Teams({ user, groupId: propGroupId }) {
-  const { groupId: paramGroupId } = useParams(); // Get groupId from URL params if exists
+  const { groupId: paramGroupId } = useParams();
   const navigate = useNavigate();
-  const [teams, setTeams] = useState([]);
-  const [group, setGroup] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
   
   // Determine which groupId to use
   const groupId = propGroupId || paramGroupId;
@@ -65,89 +63,28 @@ export default function Teams({ user, groupId: propGroupId }) {
     group_id: groupId || ""
   });
 
-  useEffect(() => {
-    if (groupId) {
-      fetchGroupDetails();
-    }
-    fetchTeams();
-  }, [groupId]);
-
-  const fetchGroupDetails = async () => {
-    if (!groupId) return;
-    
-    try {
-      const response = await api.get(`/groups/${groupId}`);
-      setGroup(response.data.data);
-      // Update newTeam with group_id
-      setNewTeam(prev => ({ ...prev, group_id: groupId }));
-    } catch (error) {
-      console.error("Error fetching group details:", error);
-      showMessage("error", "Failed to fetch group details");
-    }
-  };
-
-  const fetchTeams = async () => {
-    try {
-      setLoading(true);
-      let response;
-      
-      if (groupId) {
-        // Fetch teams for specific group
-        response = await api.get(`/groups/${groupId}/teams`);
-      } else {
-        // Fetch all teams
-        response = await api.get(`/teams`);
-      }
-      
-      setTeams(response.data.data);
-    } catch (error) {
-      console.error("Error fetching teams:", error);
-      showMessage("error", "Failed to fetch teams");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks
+  const { data: group, isLoading: groupLoading } = useGroup(groupId);
+  const { data: teams = [], isLoading: teamsLoading } = useGroupTeams(groupId);
+  const createTeamMutation = useCreateTeam();
+  const updateStatusMutation = useUpdateTeamStatus();
 
   const handleCreate = async () => {
-    try {
-      if (!newTeam.group_id) {
-        showMessage("error", "Group ID is required");
-        return;
-      }
-      
-      const response = await api.post("/teams", newTeam);
-      
-      showMessage("success", response.data.message);
-      setDialogOpen(false);
-      setNewTeam({ name: "", description: "", group_id: groupId || "" });
-      fetchTeams();
-    } catch (error) {
-      console.error("Error creating team:", error);
-      showMessage("error", error.response?.data?.message || "Failed to create team");
-    }
+    if (!newTeam.group_id) return;
+    
+    await createTeamMutation.mutateAsync(newTeam);
+    setDialogOpen(false);
+    setNewTeam({ name: "", description: "", group_id: groupId || "" });
   };
 
-  const handleStatusUpdate = async (teamId, status) => {
-    try {
-      await api.patch(`/teams/${teamId}/status`, { status });
-      
-      showMessage("success", `Team ${status === 'active' ? 'activated' : 'deactivated'}`);
-      fetchTeams();
-    } catch (error) {
-      console.error("Error updating team status:", error);
-      showMessage("error", error.response?.data?.message || "Failed to update team status");
-    }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+  const handleStatusUpdate = (teamId, status) => {
+    updateStatusMutation.mutate({ id: teamId, status });
   };
 
   const getStatusBadge = (status) => {
     const colors = {
-      active: "bg-green-100 text-green-800 hover:bg-green-100",
-      inactive: "bg-gray-100 text-gray-800 hover:bg-gray-100"
+      active: "bg-green-100 text-green-800",
+      inactive: "bg-gray-100 text-gray-800"
     };
 
     return (
@@ -157,7 +94,9 @@ export default function Teams({ user, groupId: propGroupId }) {
     );
   };
 
-  if (loading) {
+  const isLoading = groupLoading || teamsLoading;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -170,13 +109,6 @@ export default function Teams({ user, groupId: propGroupId }) {
 
   return (
     <div className="space-y-6">
-      {/* Message Alert */}
-      {message.text && (
-        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -244,8 +176,18 @@ export default function Teams({ user, groupId: propGroupId }) {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreate} disabled={!newTeam.name.trim()}>
-                  Create Team
+                <Button 
+                  onClick={handleCreate} 
+                  disabled={!newTeam.name.trim() || createTeamMutation.isPending}
+                >
+                  {createTeamMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Team'
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -290,7 +232,7 @@ export default function Teams({ user, groupId: propGroupId }) {
                   {teams.reduce((sum, team) => sum + (team.user_count || 0), 0)}
                 </p>
               </div>
-              <UserPlus className="w-8 h-8 text-purple-600" />
+              <Users className="w-8 h-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -381,6 +323,7 @@ export default function Teams({ user, groupId: propGroupId }) {
                               <DropdownMenuItem 
                                 onClick={() => handleStatusUpdate(team.id, 'inactive')}
                                 className="text-red-600"
+                                disabled={updateStatusMutation.isPending}
                               >
                                 <XCircle className="w-4 h-4 mr-2" />
                                 Deactivate
@@ -389,6 +332,7 @@ export default function Teams({ user, groupId: propGroupId }) {
                               <DropdownMenuItem 
                                 onClick={() => handleStatusUpdate(team.id, 'active')}
                                 className="text-green-600"
+                                disabled={updateStatusMutation.isPending}
                               >
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 Activate

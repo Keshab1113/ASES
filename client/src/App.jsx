@@ -45,6 +45,8 @@ import SystemAdministration from "./pages/SystemAdmin/SystemAdministration/Syste
 import CreateRolePage from "./pages/SystemAdmin/SystemAdministration/CreateRoleModal";
 import CreatePermissionPage from "./pages/SystemAdmin/SystemAdministration/CreatePermissionsModal";
 import IndicatorDetailsPage from "./pages/Indicators/IndicatorDetailsPage";
+import CreateIndicatorPage from "./pages/Indicators/CreateIndicatorPage";
+import AssignIndicatorPage from "./pages/Indicators/AssignIndicatorPage";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -136,10 +138,12 @@ function App() {
           />
           <Route path="indicators-dashboard">
             <Route index element={<IndicatorsManagement user={user} />} />
+            <Route path="create" element={<CreateIndicatorPage user={user} />} />
             <Route
               path=":id/:type"
               element={<IndicatorDetailsPage user={user} />}
             />
+            <Route path=":id/:type/assign" element={<AssignIndicatorPage user={user} />} />
           </Route>
         </Route>
 

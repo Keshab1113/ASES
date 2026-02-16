@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+// pages/SystemAdmin/SystemAdministration/SystemAdministration.jsx
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
 import {
   Shield,
   Users,
@@ -21,18 +21,16 @@ import {
   Loader2,
   UserCog,
 } from "lucide-react";
-import api from "../../../api/axios";
+import { useNavigate } from "react-router-dom";
+import { useRoles, usePermissions, useDeleteRole } from "../../../hooks/useRBAC";
+import { useUsers } from "../../../hooks/useUsers";
 import EditRoleModal from "./EditRoleModal";
 import RoleDetailsModal from "./RoleDetailsModal";
 import UserPermissionsModal from "./UserPermissionsModal";
 import AuditLogsTable from "./AuditLogsTable";
-import { useNavigate } from "react-router-dom";
 
 export default function SystemAdministration({ user }) {
-  const [roles, setRoles] = useState([]);
-  const [permissions, setPermissions] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("roles");
 
@@ -42,143 +40,27 @@ export default function SystemAdministration({ user }) {
   const [showUserPermissions, setShowUserPermissions] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchRoles();
-    fetchPermissions();
-    fetchUsers();
-  }, []);
+  // React Query hooks
+  const { data: roles = [], isLoading: rolesLoading } = useRoles();
+  const { data: permissions = [], isLoading: permissionsLoading } = usePermissions();
+  const { data: users = [], isLoading: usersLoading } = useUsers();
+  const deleteRoleMutation = useDeleteRole();
 
-  const fetchRoles = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get("/rbac/roles");
-
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setRoles(data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching roles:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch roles",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+  const handleDeleteRole = (id, roleName) => {
+    if (window.confirm(`Are you sure you want to delete "${roleName}"?`)) {
+      deleteRoleMutation.mutate(id);
     }
   };
 
-  const fetchPermissions = async () => {
-    try {
-      const response = await api.get("/rbac/permissions");
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setPermissions(data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching permissions:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch permissions",
-        variant: "destructive",
-      });
-    }
+  const handleViewDetails = (role) => {
+    setSelectedRole(role);
+    setShowDetailsModal(true);
   };
 
-  const fetchUsers = async () => {
-    try {
-      // This endpoint might need to be adjusted based on your API
-      const response = await api.get("/users");
-      if (response.status === 200 && response.data?.success) {
-        setUsers(response.data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      // Don't show error toast for optional feature
-    }
-  };
-
-  const handleUpdateRole = async (id, roleData) => {
-    try {
-      const response = await api.put(`/rbac/roles/${id}`, roleData);
-      if (response.status === 200 && response.data?.success) {
-        toast({
-          title: "Success",
-          description: "Role updated successfully!",
-        });
-        setShowEditModal(false);
-        setSelectedRole(null);
-        fetchRoles();
-      }
-    } catch (error) {
-      console.error("Update role error:", error);
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to update role",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteRole = async (id, roleName) => {
-    if (!confirm(`Are you sure you want to delete "${roleName}"?`)) return;
-
-    try {
-      const response = await api.delete(`/rbac/roles/${id}`);
-      if (response.status === 200 && response.data?.success) {
-        toast({
-          title: "Success",
-          description: "Role deleted successfully!",
-        });
-        fetchRoles();
-      }
-    } catch (error) {
-      console.error("Delete role error:", error);
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to delete role",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleViewDetails = async (roleId) => {
-    try {
-      const response = await api.get(`/rbac/roles/${roleId}`);
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setSelectedRole(data.data);
-        setShowDetailsModal(true);
-      }
-    } catch (error) {
-      console.error("Fetch role details error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load role details",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleEditClick = async (roleId) => {
-    try {
-      const response = await api.get(`/rbac/roles/${roleId}`);
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setSelectedRole(data.data);
-        setShowEditModal(true);
-      }
-    } catch (error) {
-      console.error("Fetch role error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load role data",
-        variant: "destructive",
-      });
-    }
+  const handleEditClick = (role) => {
+    setSelectedRole(role);
+    setShowEditModal(true);
   };
 
   const handleViewUserPermissions = (user) => {
@@ -208,6 +90,19 @@ export default function SystemAdministration({ user }) {
       0
     ),
   };
+
+  const isLoading = rolesLoading || permissionsLoading || usersLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto" />
+          <p className="mt-2 text-sm text-slate-500">Loading system data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -361,19 +256,15 @@ export default function SystemAdministration({ user }) {
             </div>
 
             <div>
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                </div>
-              ) : filteredRoles.length > 0 ? (
+              {filteredRoles.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredRoles.map((role) => (
                     <RoleCard
                       key={role.id}
                       role={role}
-                      onView={handleViewDetails}
-                      onEdit={handleEditClick}
-                      onDelete={handleDeleteRole}
+                      onView={() => handleViewDetails(role)}
+                      onEdit={() => handleEditClick(role)}
+                      onDelete={() => handleDeleteRole(role.id, role.role_name)}
                     />
                   ))}
                 </div>
@@ -387,6 +278,12 @@ export default function SystemAdministration({ user }) {
                         ? "No roles match your search"
                         : "Get started by creating your first role"}
                     </p>
+                    {!searchTerm && (
+                      <Button onClick={() => navigate("/system-admin/create-role")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Role
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -514,7 +411,6 @@ export default function SystemAdministration({ user }) {
             setShowEditModal(false);
             setSelectedRole(null);
           }}
-          onUpdate={handleUpdateRole}
         />
       )}
 
@@ -573,7 +469,7 @@ function RoleCard({ role, onView, onEdit, onDelete }) {
             )} group-hover:scale-110 transition-transform`}
           >
             <Shield
-              className={`w-6 h-6 ${getHierarchyColor(role.hierarchy_level)} `}
+              className={`w-6 h-6 ${getHierarchyColor(role.hierarchy_level)}`}
             />
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
@@ -649,7 +545,7 @@ function RoleCard({ role, onView, onEdit, onDelete }) {
             variant="outline"
             size="sm"
             className="flex-1 hover:bg-purple-50 hover:border-purple-300 dark:hover:bg-purple-900/20"
-            onClick={() => onView(role.id)}
+            onClick={onView}
           >
             <Eye className="w-4 h-4 mr-1" />
             View
@@ -658,7 +554,7 @@ function RoleCard({ role, onView, onEdit, onDelete }) {
             variant="outline"
             size="sm"
             className="hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-900/20"
-            onClick={() => onEdit(role.id)}
+            onClick={onEdit}
           >
             <Edit className="w-4 h-4" />
           </Button>
@@ -666,7 +562,7 @@ function RoleCard({ role, onView, onEdit, onDelete }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onDelete(role.id, role.role_name)}
+              onClick={onDelete}
               className="text-red-600 hover:bg-red-50 hover:border-red-300 dark:hover:bg-red-900/20"
             >
               <Trash2 className="w-4 h-4" />

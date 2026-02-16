@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// pages/Groups/Groups.jsx
+import { useState } from "react";
 import { 
   Card, 
   CardContent, 
@@ -34,7 +35,8 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  MoreVertical
+  MoreVertical,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -42,90 +44,48 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import api from "../../api/axios";
+import { useGroups, useCreateGroup, useUpdateGroupStatus } from "../../hooks/useGroups";
 import { useNavigate } from "react-router-dom";
 
 export default function Groups() {
   const navigate = useNavigate();
-  const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
-  
   const [newGroup, setNewGroup] = useState({
     name: "",
     description: ""
   });
 
-  useEffect(() => {
-    fetchGroups();
-  }, []);
-
-  const fetchGroups = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/groups");
-      setGroups(response.data.data);
-    } catch (error) {
-      console.error("Error fetching groups:", error);
-      showMessage("error", "Failed to fetch groups");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks
+  const { data: groups = [], isLoading } = useGroups();
+  const createGroupMutation = useCreateGroup();
+  const updateStatusMutation = useUpdateGroupStatus();
 
   const handleCreate = async () => {
-    try {
-      const response = await api.post("/groups", newGroup);
-      
-      showMessage("success", response.data.message);
-      setDialogOpen(false);
-      setNewGroup({ name: "", description: "" });
-      fetchGroups();
-    } catch (error) {
-      console.error("Error creating group:", error);
-      showMessage("error", error.response?.data?.message || "Failed to create group");
-    }
+    await createGroupMutation.mutateAsync(newGroup);
+    setDialogOpen(false);
+    setNewGroup({ name: "", description: "" });
   };
 
-  const handleStatusUpdate = async (groupId, status) => {
-    try {
-      await api.patch(`/groups/${groupId}/status`, { status });
-      
-      showMessage("success", `Group ${status === 'active' ? 'activated' : 'deactivated'}`);
-      fetchGroups();
-    } catch (error) {
-      console.error("Error updating group status:", error);
-      showMessage("error", error.response?.data?.message || "Failed to update group status");
-    }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+  const handleStatusUpdate = (groupId, status) => {
+    updateStatusMutation.mutate({ id: groupId, status });
   };
 
   const getStatusBadge = (status) => {
-    const variants = {
-      active: "default",
-      inactive: "secondary",
-      pending: "outline"
-    };
-    
     const colors = {
-      active: "bg-green-100 text-green-800 hover:bg-green-100",
-      inactive: "bg-gray-100 text-gray-800 hover:bg-gray-100",
-      pending: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
+      active: "bg-green-100 text-green-800",
+      inactive: "bg-gray-100 text-gray-800",
+      pending: "bg-yellow-100 text-yellow-800"
     };
 
     return (
-      <Badge className={`${colors[status]} capitalize`} variant={variants[status]}>
+      <Badge className={`${colors[status]} capitalize`}>
+        {status === 'pending' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
         {status}
       </Badge>
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -138,13 +98,6 @@ export default function Groups() {
 
   return (
     <div className="space-y-6">
-      {/* Message Alert */}
-      {message.text && (
-        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -190,8 +143,18 @@ export default function Groups() {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={!newGroup.name.trim()}>
-                Create Group
+              <Button 
+                onClick={handleCreate} 
+                disabled={!newGroup.name.trim() || createGroupMutation.isPending}
+              >
+                {createGroupMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Group'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -317,6 +280,7 @@ export default function Groups() {
                             <DropdownMenuItem 
                               onClick={() => handleStatusUpdate(group.id, 'inactive')}
                               className="text-red-600"
+                              disabled={updateStatusMutation.isPending}
                             >
                               <XCircle className="w-4 h-4 mr-2" />
                               Deactivate
@@ -325,6 +289,7 @@ export default function Groups() {
                             <DropdownMenuItem 
                               onClick={() => handleStatusUpdate(group.id, 'active')}
                               className="text-green-600"
+                              disabled={updateStatusMutation.isPending}
                             >
                               <CheckCircle className="w-4 h-4 mr-2" />
                               Activate

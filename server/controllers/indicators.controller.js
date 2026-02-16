@@ -7,9 +7,12 @@ import fs from "fs";
 const indicatorService = new IndicatorService();
 const ftpUploader = new FTPUploader();
 
-// Upload and analyze document
+// Update the uploadAndAnalyze function
 export const uploadAndAnalyze = async (req, res) => {
+  const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -19,16 +22,7 @@ export const uploadAndAnalyze = async (req, res) => {
 
     const groupId = req.body.groupId ? parseInt(req.body.groupId) : null;
     const teamId = req.body.teamId ? parseInt(req.body.teamId) : null;
-    const documentType = req.body.documentType;
     const userId = req.user.id;
-
-    console.log("Upload parameters:", {
-      userId,
-      groupId,
-      teamId,
-      documentType,
-      file: req.file.originalname,
-    });
 
     // Upload to FTP
     const uploadResult = await ftpUploader.uploadFile(req.file.path, {
@@ -46,6 +40,66 @@ export const uploadAndAnalyze = async (req, res) => {
       teamId,
     );
 
+    // Create indicators from analysis if any were found
+    const createdIndicators = [];
+    if (analysisResult.classification) {
+      // Create a leading indicator based on the classification
+      const indicatorCode = `AUTO_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      const insertQuery = `
+        INSERT INTO leading_indicators 
+        (indicator_code, name, description, category, measurement_unit, 
+         target_value, min_acceptable, weight, created_by, created_at, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), TRUE)
+      `;
+
+      const insertParams = [
+        indicatorCode,
+        `AI Generated: ${analysisResult.classification.category}`,
+        `Auto-created from document analysis. Confidence: ${analysisResult.classification.confidence}`,
+        analysisResult.classification.category || "general",
+        "count",
+        100,
+        70,
+        1.0,
+        userId,
+      ];
+
+      const [result] = await connection.execute(insertQuery, insertParams);
+
+      // Create metadata entry
+      await connection.execute(
+        `INSERT INTO indicator_metadata 
+         (indicator_id, indicator_type, created_by_role, group_id, team_id, created_at)
+         VALUES (?, 'leading', ?, ?, ?, NOW())`,
+        [result.insertId, req.user.role, groupId, teamId],
+      );
+
+      createdIndicators.push({
+        id: result.insertId,
+        type: "leading",
+        code: indicatorCode,
+        name: `AI Generated: ${analysisResult.classification.category}`,
+        category: analysisResult.classification.category,
+      });
+
+      // Save analysis record
+      await connection.execute(
+        `INSERT INTO document_analysis 
+         (document_url, analysis_result, created_by, group_id, team_id, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [
+          uploadResult.url,
+          JSON.stringify(analysisResult),
+          userId,
+          groupId,
+          teamId,
+        ],
+      );
+    }
+
+    await connection.commit();
+
     // Clean up local file
     if (fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -55,15 +109,19 @@ export const uploadAndAnalyze = async (req, res) => {
       success: true,
       upload: uploadResult,
       analysis: analysisResult,
-      message: "File uploaded and analyzed successfully",
+      created_indicators: createdIndicators,
+      message: `File uploaded and analyzed successfully. Created ${createdIndicators.length} indicator(s).`,
     });
   } catch (error) {
+    await connection.rollback();
     console.error("Upload and analyze error:", error);
     res.status(500).json({
       success: false,
       message: "Analysis failed",
       error: error.message,
     });
+  } finally {
+    connection.release();
   }
 };
 
@@ -187,6 +245,8 @@ export const getIndicators = async (req, res) => {
     let whereConditions = [];
     let params = [];
 
+    whereConditions.push("li.is_active = TRUE");
+
     if (user.role === "employee") {
       whereConditions.push("(im.group_id = ? OR im.team_id = ?)");
       params.push(user.group_id, user.team_id);
@@ -271,8 +331,7 @@ export const getIndicatorById = async (req, res) => {
       });
     }
 
-    const tableName =
-      type === "leading" ? "leading_indicators" : "lagging_indicators";
+    const tableName = type;
 
     const [indicators] = await pool.execute(
       `SELECT li.*, im.created_by_role, im.group_id, im.team_id,
@@ -345,8 +404,7 @@ export const updateIndicator = async (req, res) => {
       });
     }
 
-    const tableName =
-      type === "leading" ? "leading_indicators" : "lagging_indicators";
+    const tableName = type;
 
     // Build dynamic update query
     const allowedFields =
@@ -421,15 +479,14 @@ export const deleteIndicator = async (req, res) => {
     const { id } = req.params;
     const { type } = req.query;
 
-    if (!type) {
+    if (!type || type === "undefined") {
       return res.status(400).json({
         success: false,
         message: "indicator type is required",
       });
     }
 
-    const tableName =
-      type === "leading" ? "leading_indicators" : "lagging_indicators";
+    const tableName = type;
 
     const [result] = await pool.execute(
       `UPDATE ${tableName} 
@@ -479,8 +536,7 @@ export const assignIndicator = async (req, res) => {
     const assignedByRole = req.user.role;
 
     // Verify indicator exists
-    const tableName =
-      type === "leading" ? "leading_indicators" : "lagging_indicators";
+    const tableName = type;
     const [indicator] = await connection.execute(
       `SELECT * FROM ${tableName} WHERE id = ? AND is_active = TRUE`,
       [id],
@@ -1097,7 +1153,7 @@ export const getIndicatorDetails = async (req, res) => {
       });
     }
 
-    const tableName = type === "leading" ? "leading_indicators" : "lagging_indicators";
+    const tableName = type;
 
     // Get indicator basic info
     const [indicators] = await pool.execute(
@@ -1127,7 +1183,7 @@ export const getIndicatorDetails = async (req, res) => {
        WHERE indicator_id = ? AND indicator_type = ?
        ORDER BY measurement_date DESC, recorded_at DESC 
        LIMIT 1`,
-      [id, type]
+      [id, type],
     );
 
     // Get assignments with user details
@@ -1168,7 +1224,7 @@ export const getIndicatorDetails = async (req, res) => {
         `SELECT AVG(CAST(JSON_EXTRACT(metadata, '$.severity') AS DECIMAL)) as avg_severity
          FROM indicator_measurements 
          WHERE indicator_id = ? AND indicator_type = ? AND metadata IS NOT NULL`,
-        [id, type]
+        [id, type],
       );
       avgSeverity = severityResult[0]?.avg_severity;
     }
@@ -1182,7 +1238,7 @@ export const getIndicatorDetails = async (req, res) => {
          AVG(measured_value) as avg_value
        FROM indicator_measurements 
        WHERE indicator_id = ? AND indicator_type = ?`,
-      [id, type]
+      [id, type],
     );
 
     res.json({

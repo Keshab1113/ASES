@@ -1,3 +1,4 @@
+// pages/Login/Login.jsx
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,75 +23,22 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate } from "react-router-dom";
-import api from "../../api/axios"; // Import axios instance
+import { Link } from "react-router-dom";
+import { useLogin } from "../../hooks/useAuth";
 
-export default function Login({ onLogin }) {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+
+  const loginMutation = useLogin();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    // Basic validation
-    if (!email || !password) {
-      setError("Please enter both email and password");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Use axios for API call
-      const response = await api.post("/auth/login", { email, password });
-
-      if (response.data.success && response.data.token) {
-        // Store token
-        localStorage.setItem("token", response.data.token);
-        
-        // Call onLogin callback with user data
-        if (onLogin) {
-          onLogin(response.data.user, response.data.token);
-        }
-        
-        // Navigate to dashboard
-        navigate("/app");
-      } else {
-        setError(response.data.message || "Authentication failed");
-      }
-    } catch (err) {
-      // Handle axios errors
-      if (err.response) {
-        // Server responded with error status
-        const errorMessage = err.response.data.message || "Authentication failed";
-        
-        // Handle specific error cases
-        if (err.response.status === 403 && err.response.data.status === 'pending') {
-          setError("Your account is pending approval. Please contact your administrator.");
-        } else if (err.response.status === 403) {
-          setError(`Account is ${err.response.data.message?.toLowerCase()}. Please contact administrator.`);
-        } else if (err.response.status === 401) {
-          setError("Invalid email or password. Please try again.");
-        } else if (err.response.status === 404) {
-          setError("No account found with this email address.");
-        } else {
-          setError(errorMessage);
-        }
-      } else if (err.request) {
-        // Request was made but no response
-        setError("Network error. Please check your connection and try again.");
-      } else {
-        // Something else happened
-        setError(err.message || "An error occurred during login");
-      }
-    } finally {
-      setLoading(false);
-    }
+    
+    if (!email || !password) return;
+    
+    await loginMutation.mutateAsync({ email, password });
   };
 
   const handleDemoLogin = (role) => {
@@ -210,13 +158,15 @@ export default function Login({ onLogin }) {
               </div>
             </div>
 
-            {error && (
+            {loginMutation.isError && (
               <Alert
                 variant="destructive"
                 className="animate-in fade-in duration-300"
               >
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{error}</AlertDescription>
+                <AlertDescription className="text-xs">
+                  {loginMutation.error?.response?.data?.message || "Login failed"}
+                </AlertDescription>
               </Alert>
             )}
           </CardHeader>
@@ -293,9 +243,9 @@ export default function Login({ onLogin }) {
               <Button
                 type="submit"
                 className="w-full cursor-pointer h-11 bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-700 hover:to-emerald-700 transition-all duration-300"
-                disabled={loading}
+                disabled={loginMutation.isPending}
               >
-                {loading ? (
+                {loginMutation.isPending ? (
                   <span className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Authenticating...

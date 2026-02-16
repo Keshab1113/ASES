@@ -1,56 +1,43 @@
-import React, { useState, useEffect } from 'react';
+// pages/Alerts/AlertsDashboard.jsx
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { 
   AlertTriangle, Bell, CheckCircle, Clock, Filter, 
-  Search, TrendingUp, TrendingDown, Shield
+  Search, TrendingUp, TrendingDown, Shield, Loader2
 } from 'lucide-react';
 import { PredictiveAlertCard } from '../../components/alerts/PredictiveAlertCard';
-import api from '../../api/axios';
+import { useAlerts, useAcknowledgeAlert, useConfigureAlertSettings } from '../../hooks/useAlerts';
 
 export default function AlertsDashboard({ user }) {
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showConfig, setShowConfig] = useState(false);
+  const [configSettings, setConfigSettings] = useState({
+    threshold: 'high',
+    frequency: 'immediate',
+    escalation: 'team'
+  });
 
-  useEffect(() => {
-    fetchAlerts();
-  }, []);
+  // React Query hooks
+  const { 
+    data: alerts = [], 
+    isLoading, 
+    refetch 
+  } = useAlerts();
+  
+  const acknowledgeMutation = useAcknowledgeAlert();
+  const configureMutation = useConfigureAlertSettings();
 
-  const fetchAlerts = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/indicators/alerts');
-      
-      if (response.status === 200 && response.data?.success) {
-        const data = await response.data;
-        setAlerts(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching alerts:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleAcknowledge = (alertId) => {
+    acknowledgeMutation.mutate(alertId);
   };
 
-  const acknowledgeAlert = async (alertId) => {
-    try {
-      const response = await api.post(`/indicators/alerts/${alertId}/acknowledge`);
-      
-      if (response.status === 200 && response.data?.success) {
-        // Update local state
-        setAlerts(prev => prev.map(alert => 
-          alert.id === alertId 
-            ? { ...alert, status: 'acknowledged', acknowledged_by: user.id }
-            : alert
-        ));
-      }
-    } catch (error) {
-      console.error('Error acknowledging alert:', error);
-    }
+  const handleSaveConfig = () => {
+    configureMutation.mutate(configSettings);
+    setShowConfig(false);
   };
 
   const filteredAlerts = alerts.filter(alert => {
@@ -60,47 +47,27 @@ export default function AlertsDashboard({ user }) {
     return matchesSearch && matchesStatus;
   });
 
-  // Mock alerts for demonstration
-  const mockAlerts = [
-    {
-      id: 1,
-      title: "Forklift Safety Risk Increase",
-      description: "AI detected 45% increased risk of forklift incidents in Warehouse Zone A based on recent patterns",
-      alert_type: "leading_decline",
-      severity: "high",
-      status: "active",
-      created_at: new Date().toISOString(),
-      predicted_risk_score: 7.8,
-      confidence: 0.85,
-      acknowledged_by: null
-    },
-    {
-      id: 2,
-      title: "Delayed Equipment Maintenance",
-      description: "Critical maintenance tasks overdue by 7+ days in Production Line 3",
-      alert_type: "score_drop",
-      severity: "medium",
-      status: "active",
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      predicted_risk_score: 6.2,
-      confidence: 0.92,
-      acknowledged_by: null
-    },
-    {
-      id: 3,
-      title: "PPE Compliance Decline",
-      description: "15% drop in PPE compliance observed in Construction Zone B",
-      alert_type: "lagging_spike",
-      severity: "medium",
-      status: "acknowledged",
-      created_at: new Date(Date.now() - 172800000).toISOString(),
-      predicted_risk_score: 5.5,
-      confidence: 0.78,
-      acknowledged_by: 1
-    }
-  ];
+  // Mock alerts for demonstration if no data
+  const displayAlerts = alerts.length > 0 ? filteredAlerts : [];
 
-  const displayAlerts = alerts.length > 0 ? filteredAlerts : mockAlerts;
+  // Stats
+  const stats = {
+    active: alerts.filter(a => a.status === 'active').length,
+    acknowledged: alerts.filter(a => a.status === 'acknowledged').length,
+    high: alerts.filter(a => a.severity === 'high' || a.severity === 'critical').length,
+    avgResponse: '4.2h' // This would come from API
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-sky-600 animate-spin mx-auto" />
+          <p className="mt-2 text-sm text-slate-500">Loading alerts...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -115,11 +82,15 @@ export default function AlertsDashboard({ user }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button size="sm" variant="outline" className="gap-2" onClick={fetchAlerts}>
+          <Button size="sm" variant="outline" className="gap-2" onClick={() => refetch()}>
             <Bell className="w-4 h-4" />
             Refresh Alerts
           </Button>
-          <Button size="sm" className="gap-2">
+          <Button 
+            size="sm" 
+            className="gap-2"
+            onClick={() => setShowConfig(!showConfig)}
+          >
             <Shield className="w-4 h-4" />
             Configure Alerts
           </Button>
@@ -130,28 +101,28 @@ export default function AlertsDashboard({ user }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Active Alerts" 
-          value="3" 
+          value={stats.active.toString()} 
           icon={<AlertTriangle className="w-5 h-5" />}
           color="text-red-600 bg-red-50 dark:bg-red-900/20"
-          trend="up"
+          trend={stats.active > 0 ? 'up' : 'same'}
         />
         <StatCard 
           title="Acknowledged" 
-          value="1" 
+          value={stats.acknowledged.toString()} 
           icon={<CheckCircle className="w-5 h-5" />}
           color="text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
           trend="same"
         />
         <StatCard 
           title="High Priority" 
-          value="2" 
+          value={stats.high.toString()} 
           icon={<Bell className="w-5 h-5" />}
           color="text-amber-600 bg-amber-50 dark:bg-amber-900/20"
-          trend="up"
+          trend={stats.high > 0 ? 'up' : 'same'}
         />
         <StatCard 
           title="Avg Response Time" 
-          value="4.2h" 
+          value={stats.avgResponse} 
           icon={<Clock className="w-5 h-5" />}
           color="text-blue-600 bg-blue-50 dark:bg-blue-900/20"
           trend="down"
@@ -206,6 +177,71 @@ export default function AlertsDashboard({ user }) {
         </div>
       </div>
 
+      {/* Configuration Panel */}
+      {showConfig && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-600" />
+              Alert Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Alert Threshold</label>
+                  <select 
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                    value={configSettings.threshold}
+                    onChange={(e) => setConfigSettings({...configSettings, threshold: e.target.value})}
+                  >
+                    <option value="high">High (70% risk score)</option>
+                    <option value="medium">Medium (50% risk score)</option>
+                    <option value="low">Low (30% risk score)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Notification Frequency</label>
+                  <select 
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                    value={configSettings.frequency}
+                    onChange={(e) => setConfigSettings({...configSettings, frequency: e.target.value})}
+                  >
+                    <option value="immediate">Immediate</option>
+                    <option value="daily">Daily Digest</option>
+                    <option value="weekly">Weekly Summary</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Escalation Level</label>
+                  <select 
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                    value={configSettings.escalation}
+                    onChange={(e) => setConfigSettings({...configSettings, escalation: e.target.value})}
+                  >
+                    <option value="team">Team Level</option>
+                    <option value="group">Group Level</option>
+                    <option value="executive">Executive Level</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveConfig} disabled={configureMutation.isPending}>
+                  {configureMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  Save Configuration
+                </Button>
+                <Button variant="outline" onClick={() => setShowConfig(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Critical Alert Banner */}
       {displayAlerts.some(alert => alert.severity === 'critical' && alert.status === 'active') && (
         <Card className="border-l-4 border-red-500 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/10 dark:to-orange-900/10">
@@ -234,17 +270,7 @@ export default function AlertsDashboard({ user }) {
 
       {/* Alerts Grid */}
       <div className="space-y-4">
-        {loading ? (
-          // Loading skeletons
-          Array.from({ length: 3 }).map((_, index) => (
-            <Card key={index} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded mb-4" />
-                <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded" />
-              </CardContent>
-            </Card>
-          ))
-        ) : displayAlerts.length > 0 ? (
+        {displayAlerts.length > 0 ? (
           displayAlerts.map((alert) => (
             <div key={alert.id}>
               <PredictiveAlertCard alert={alert} />
@@ -253,10 +279,15 @@ export default function AlertsDashboard({ user }) {
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => acknowledgeAlert(alert.id)}
+                    onClick={() => handleAcknowledge(alert.id)}
                     className="gap-1"
+                    disabled={acknowledgeMutation.isPending}
                   >
-                    <CheckCircle className="w-3 h-3" />
+                    {acknowledgeMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-3 h-3" />
+                    )}
                     Acknowledge
                   </Button>
                 </div>
@@ -279,49 +310,6 @@ export default function AlertsDashboard({ user }) {
           </Card>
         )}
       </div>
-
-      {/* Alert Configuration */}
-      {(user?.role === 'group_admin' || user?.role === 'super_admin') && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-600" />
-              Alert Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Alert Threshold</label>
-                  <select className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-                    <option>High (70% risk score)</option>
-                    <option>Medium (50% risk score)</option>
-                    <option>Low (30% risk score)</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notification Frequency</label>
-                  <select className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-                    <option>Immediate</option>
-                    <option>Daily Digest</option>
-                    <option>Weekly Summary</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Escalation Level</label>
-                  <select className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-                    <option>Team Level</option>
-                    <option>Group Level</option>
-                    <option>Executive Level</option>
-                  </select>
-                </div>
-              </div>
-              <Button className="w-full md:w-auto">Save Configuration</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

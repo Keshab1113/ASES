@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import api from "../../api/axios";
+// components/SystemAdministration/PermissionChecker.jsx
+import { useEffect } from "react";
+import { useCheckPermission } from "../../hooks/useRBAC";
+import { Loader2 } from "lucide-react";
 
 /**
  * Permission Checker Component
@@ -28,66 +30,41 @@ export default function PermissionChecker({
   fallback = null,
   showLoading = false
 }) {
-  const [hasPermission, setHasPermission] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    checkPermissions();
-  }, [permission, permissions]);
-
-  const checkPermissions = async () => {
+  // Get user from token
+  const token = localStorage.getItem("token");
+  let userId = null;
+  
+  if (token) {
     try {
-      // Get user from token
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setHasPermission(false);
-        setLoading(false);
-        return;
-      }
-
       const payload = JSON.parse(atob(token.split(".")[1]));
-      const userId = payload.id;
-
-      // Build list of permissions to check
-      const permsToCheck = permission ? [permission] : permissions;
-
-      if (permsToCheck.length === 0) {
-        setHasPermission(true);
-        setLoading(false);
-        return;
-      }
-
-      // Check each permission
-      const checks = await Promise.all(
-        permsToCheck.map(async (perm) => {
-          const response = await api.get(`/rbac/permissions/check?userId=${userId}&permissionKey=${perm}`);
-          if (response.status === 200 && response.data?.success) {
-            const data = await response.data;
-            return data.has_permission;
-          }
-          return false;
-        })
-      );
-
-      // Determine if user has required permissions
-      const result = requireAll 
-        ? checks.every(check => check === true)
-        : checks.some(check => check === true);
-
-      setHasPermission(result);
+      userId = payload.id;
     } catch (error) {
-      console.error("Permission check error:", error);
-      setHasPermission(false);
-    } finally {
-      setLoading(false);
+      console.error("Error decoding token:", error);
     }
-  };
-
-  if (loading && showLoading) {
-    return <div className="animate-pulse h-8 bg-slate-200 dark:bg-slate-700 rounded"></div>;
   }
 
-  if (loading && !showLoading) {
+  // Build list of permissions to check
+  const permsToCheck = permission ? [permission] : permissions;
+
+  // Check each permission
+  const results = permsToCheck.map(perm => 
+    useCheckPermission(userId, perm)
+  );
+
+  const isLoading = results.some(r => r.isLoading);
+  const hasPermission = requireAll
+    ? results.every(r => r.data === true)
+    : results.some(r => r.data === true);
+
+  if (isLoading && showLoading) {
+    return (
+      <div className="flex items-center justify-center h-8">
+        <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (isLoading && !showLoading) {
     return fallback;
   }
 

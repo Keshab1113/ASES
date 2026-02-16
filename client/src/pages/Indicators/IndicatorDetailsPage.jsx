@@ -1,111 +1,60 @@
 // pages/Indicators/IndicatorDetailsPage.jsx
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Share2, 
-  TrendingUp, 
-  TrendingDown, 
-  Users, 
-  Activity, 
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Share2,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Activity,
   Calendar,
   Edit,
   Download,
-  Mail
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import api from "../../api/axios";
+  UserPlus,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  useIndicator,
+  useIndicatorDetails,
+  useIndicatorResults,
+  useShareResult,
+} from '../../hooks/useIndicators';
 
 export default function IndicatorDetailsPage({ user }) {
   const { id, type } = useParams();
   const navigate = useNavigate();
-  const [indicator, setIndicator] = useState(null);
-  const [details, setDetails] = useState(null);
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [shareUrl, setShareUrl] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
-    if (id && type) {
-      fetchIndicator();
-      fetchDetails();
-      fetchResults();
-    }
-  }, [id, type]);
+  // React Query hooks
+  const { data: indicator, isLoading: indicatorLoading } = useIndicator(id, type);
+  const { data: details, isLoading: detailsLoading } = useIndicatorDetails(id, type);
+  const { data: results = [], isLoading: resultsLoading } = useIndicatorResults(id, type);
+  const shareMutation = useShareResult();
 
-  const fetchIndicator = async () => {
-    try {
-      const response = await api.get(`/indicators/${id}?type=${type}`);
-      if (response.status === 200 && response.data?.success) {
-        setIndicator(response.data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching indicator:", error);
-    }
-  };
-
-  const fetchDetails = async () => {
-    try {
-      const response = await api.get(`/indicators/${id}/details?type=${type}`);
-      if (response.status === 200 && response.data?.success) {
-        setDetails(response.data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching details:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchResults = async () => {
-    try {
-      const response = await api.get(
-        `/indicators/results/${id}?type=${type}`
-      );
-      if (response.status === 200 && response.data?.success) {
-        setResults(response.data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching results:", error);
-    }
-  };
-
-  const handleShareResult = async (resultId) => {
-    try {
-      const response = await api.post(`/indicators/results/${resultId}/share`);
-      if (response.status === 200 && response.data?.success) {
-        const shareUrl = response.data.share_url;
-        // Copy to clipboard
-        navigator.clipboard.writeText(shareUrl);
-        alert("Share link copied to clipboard!");
-      }
-    } catch (error) {
-      console.error("Error sharing result:", error);
-      alert("Failed to generate share link");
-    }
-  };
+  const loading = indicatorLoading || detailsLoading || resultsLoading;
 
   const handleExportData = () => {
-    // Create CSV content
-    const headers = ["Date", "Value", "Recorded By", "Group", "Team"];
+    const headers = ['Date', 'Value', 'Recorded By', 'Group', 'Team'];
     const csvContent = [
-      headers.join(","),
-      ...results.map(r => [
-        new Date(r.measurement_date).toLocaleDateString(),
-        r.measured_value,
-        r.recorded_by_name || "",
-        r.group_name || "",
-        r.team_name || ""
-      ].join(","))
-    ].join("\n");
+      headers.join(','),
+      ...results.map((r) =>
+        [
+          new Date(r.measurement_date).toLocaleDateString(),
+          r.measured_value,
+          r.recorded_by_name || '',
+          r.group_name || '',
+          r.team_name || '',
+        ].join(',')
+      ),
+    ].join('\n');
 
-    // Download CSV
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     a.download = `indicator-${id}-results.csv`;
     a.click();
@@ -125,11 +74,7 @@ export default function IndicatorDetailsPage({ user }) {
   if (!indicator) {
     return (
       <div className="p-6">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="mb-6"
-        >
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
@@ -146,17 +91,13 @@ export default function IndicatorDetailsPage({ user }) {
     );
   }
 
-  const isLeading = type === "leading";
+  const isLeading = type === 'leading';
 
   return (
     <div className="space-y-6">
-      {/* Header with back button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="gap-2"
-        >
+        <Button variant="ghost" onClick={() => navigate('/app/indicators-dashboard')}  className="gap-2">
           <ArrowLeft className="w-4 h-4" />
           Back to Indicators
         </Button>
@@ -165,44 +106,48 @@ export default function IndicatorDetailsPage({ user }) {
             <Download className="w-4 h-4 mr-2" />
             Export Data
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/app/indicators-dashboard/${id}/${type}/assign`)}
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Assign
+          </Button>
           <Button variant="outline" size="sm">
             <Edit className="w-4 h-4 mr-2" />
-            Edit Indicator
+            Edit
           </Button>
         </div>
       </div>
 
-      {/* Hero Section - Indicator Overview */}
+      {/* Hero Section */}
       <div className="bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8">
         <div className="flex items-start gap-6">
           <div
             className={`p-4 rounded-xl ${
               isLeading
-                ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
             }`}
           >
-            {isLeading ? (
-              <TrendingUp className="w-8 h-8" />
-            ) : (
-              <TrendingDown className="w-8 h-8" />
-            )}
+            {isLeading ? <TrendingUp className="w-8 h-8" /> : <TrendingDown className="w-8 h-8" />}
           </div>
-          
+
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
                 {indicator.name}
               </h1>
-              <Badge variant={isLeading ? "success" : "destructive"} size="lg">
+              <Badge variant={isLeading ? 'success' : 'destructive'} size="lg">
                 {type?.toUpperCase()}
               </Badge>
             </div>
-            
+
             <p className="text-lg text-slate-600 dark:text-slate-300 mb-4">
               {indicator.description}
             </p>
-            
+
             <div className="flex flex-wrap items-center gap-4">
               <Badge variant="outline" className="px-3 py-1">
                 Code: {indicator.indicator_code}
@@ -210,17 +155,12 @@ export default function IndicatorDetailsPage({ user }) {
               <Badge variant="outline" className="px-3 py-1">
                 Category: {indicator.category}
               </Badge>
-              {indicator.frequency && (
-                <Badge variant="outline" className="px-3 py-1">
-                  Frequency: {indicator.frequency}
-                </Badge>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Key Metrics Cards */}
+      {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {isLeading ? (
           <>
@@ -250,7 +190,7 @@ export default function IndicatorDetailsPage({ user }) {
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Current Value</p>
                 <p className="text-3xl font-bold text-emerald-600">
-                  {details?.current_value || "N/A"} {indicator.measurement_unit}
+                  {details?.current_value || 'N/A'} {indicator.measurement_unit}
                 </p>
               </CardContent>
             </Card>
@@ -266,41 +206,31 @@ export default function IndicatorDetailsPage({ user }) {
             <Card>
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Financial Impact</p>
-                <p className="text-3xl font-bold">
-                  {indicator.financial_impact_multiplier}x
-                </p>
+                <p className="text-3xl font-bold">{indicator.financial_impact_multiplier}x</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Total Incidents</p>
-                <p className="text-3xl font-bold text-red-600">
-                  {results.length}
-                </p>
+                <p className="text-3xl font-bold text-red-600">{results.length}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Avg. Severity</p>
-                <p className="text-3xl font-bold">
-                  {details?.avg_severity || "N/A"}
-                </p>
+                <p className="text-3xl font-bold">{details?.avg_severity || 'N/A'}</p>
               </CardContent>
             </Card>
           </>
         )}
       </div>
 
-      {/* Tabs Section */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="assignments">
-            Assignments ({details?.assignments?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="results">
-            Results ({results.length})
-          </TabsTrigger>
+          <TabsTrigger value="assignments">Assignments ({details?.assignments?.length || 0})</TabsTrigger>
+          <TabsTrigger value="results">Results ({results.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -312,9 +242,7 @@ export default function IndicatorDetailsPage({ user }) {
             <CardContent>
               {results.length > 0 ? (
                 <div className="h-64 flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
-                  <p className="text-muted-foreground">
-                    Chart visualization would go here
-                  </p>
+                  <p className="text-muted-foreground">Chart visualization would go here</p>
                 </div>
               ) : (
                 <div className="text-center py-12">
@@ -326,7 +254,7 @@ export default function IndicatorDetailsPage({ user }) {
           </Card>
 
           {/* Recent Measurements */}
-          {details?.recent_measurements && details.recent_measurements.length > 0 && (
+          {details?.recent_measurements?.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Recent Measurements</CardTitle>
@@ -349,7 +277,7 @@ export default function IndicatorDetailsPage({ user }) {
                               weekday: 'long',
                               year: 'numeric',
                               month: 'long',
-                              day: 'numeric'
+                              day: 'numeric',
                             })}
                           </p>
                         </div>
@@ -373,19 +301,15 @@ export default function IndicatorDetailsPage({ user }) {
               <dl className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm text-muted-foreground">Created By</dt>
-                  <dd className="font-medium">{indicator.created_by_name || "System"}</dd>
+                  <dd className="font-medium">{indicator.created_by_name || 'System'}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Created At</dt>
-                  <dd className="font-medium">
-                    {new Date(indicator.created_at).toLocaleDateString()}
-                  </dd>
+                  <dd className="font-medium">{new Date(indicator.created_at).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Last Updated</dt>
-                  <dd className="font-medium">
-                    {new Date(indicator.updated_at).toLocaleDateString()}
-                  </dd>
+                  <dd className="font-medium">{new Date(indicator.updated_at).toLocaleDateString()}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Measurement Unit</dt>
@@ -405,7 +329,7 @@ export default function IndicatorDetailsPage({ user }) {
                 <p className="text-muted-foreground mb-4">
                   This indicator hasn't been assigned to anyone yet.
                 </p>
-                <Button>
+                <Button onClick={() => navigate(`/app/indicators-dashboard/${id}/${type}/assign`)}>
                   <Users className="w-4 h-4 mr-2" />
                   Assign Now
                 </Button>
@@ -419,22 +343,18 @@ export default function IndicatorDetailsPage({ user }) {
                     <div className="flex items-start justify-between">
                       <div className="space-y-3">
                         <div>
-                          <h3 className="font-semibold text-lg">
-                            {assignment.assignee_name}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {assignment.assignee_email}
-                          </p>
+                          <h3 className="font-semibold text-lg">{assignment.assignee_name}</h3>
+                          <p className="text-sm text-muted-foreground">{assignment.assignee_email}</p>
                         </div>
 
                         <div className="flex items-center gap-4">
                           <Badge
                             variant={
-                              assignment.status === "completed"
-                                ? "success"
-                                : assignment.status === "in_progress"
-                                  ? "default"
-                                  : "secondary"
+                              assignment.status === 'completed'
+                                ? 'success'
+                                : assignment.status === 'in_progress'
+                                ? 'default'
+                                : 'secondary'
                             }
                             className="capitalize"
                           >
@@ -456,16 +376,9 @@ export default function IndicatorDetailsPage({ user }) {
                         )}
 
                         <p className="text-xs text-muted-foreground">
-                          Assigned by {assignment.assigned_by_name} on{" "}
+                          Assigned by {assignment.assigned_by_name} on{' '}
                           {new Date(assignment.assigned_at).toLocaleDateString()}
                         </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline">
-                          <Mail className="w-4 h-4 mr-2" />
-                          Contact
-                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -484,10 +397,6 @@ export default function IndicatorDetailsPage({ user }) {
                 <p className="text-muted-foreground mb-4">
                   This indicator hasn't been measured yet.
                 </p>
-                <Button>
-                  <Activity className="w-4 h-4 mr-2" />
-                  Record First Result
-                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -512,14 +421,12 @@ export default function IndicatorDetailsPage({ user }) {
                             {new Date(result.measurement_date).toLocaleDateString(undefined, {
                               year: 'numeric',
                               month: 'long',
-                              day: 'numeric'
+                              day: 'numeric',
                             })}
                           </div>
 
                           {result.recorded_by_name && (
-                            <Badge variant="outline">
-                              Recorded by: {result.recorded_by_name}
-                            </Badge>
+                            <Badge variant="outline">Recorded by: {result.recorded_by_name}</Badge>
                           )}
                         </div>
 
@@ -538,8 +445,9 @@ export default function IndicatorDetailsPage({ user }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleShareResult(result.id)}
+                        onClick={() => shareMutation.mutate(result.id)}
                         className="gap-2"
+                        disabled={shareMutation.isPending}
                       >
                         <Share2 className="w-4 h-4" />
                         Share Result
